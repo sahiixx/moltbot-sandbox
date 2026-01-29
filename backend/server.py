@@ -335,8 +335,57 @@ async def proxy_moltbot_ui(request: Request, path: str = ""):
                 if k.lower() not in exclude_headers
             }
             
+            # Get content and rewrite WebSocket URLs if HTML
+            content = response.content
+            content_type = response.headers.get("content-type", "")
+            
+            # If it's HTML, rewrite any WebSocket URLs to use our proxy
+            if "text/html" in content_type:
+                content_str = content.decode('utf-8', errors='ignore')
+                # Inject WebSocket URL override script
+                ws_override = '''
+<script>
+// Override WebSocket to use proxy path
+(function() {
+    const originalWS = window.WebSocket;
+    window.WebSocket = function(url, protocols) {
+        // Rewrite ws://localhost:18789 or similar to our proxy
+        if (url.includes('127.0.0.1:18789') || url.includes('localhost:18789')) {
+            const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            url = wsProtocol + '//' + window.location.host + '/api/moltbot/ws';
+        }
+        // If relative WebSocket URL, make it absolute to our proxy
+        if (url.startsWith('/') && !url.startsWith('/api/moltbot/ws')) {
+            const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            url = wsProtocol + '//' + window.location.host + '/api/moltbot/ws';
+        }
+        // Handle case where Control UI uses same-origin WebSocket
+        if (url === window.location.origin || url === window.location.origin + '/') {
+            const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            url = wsProtocol + '//' + window.location.host + '/api/moltbot/ws';
+        }
+        console.log('[Moltbot Proxy] WebSocket connecting to:', url);
+        return new originalWS(url, protocols);
+    };
+    window.WebSocket.prototype = originalWS.prototype;
+    window.WebSocket.CONNECTING = originalWS.CONNECTING;
+    window.WebSocket.OPEN = originalWS.OPEN;
+    window.WebSocket.CLOSING = originalWS.CLOSING;
+    window.WebSocket.CLOSED = originalWS.CLOSED;
+})();
+</script>
+'''
+                # Insert before </head> or at start of <body>
+                if '</head>' in content_str:
+                    content_str = content_str.replace('</head>', ws_override + '</head>')
+                elif '<body>' in content_str:
+                    content_str = content_str.replace('<body>', '<body>' + ws_override)
+                else:
+                    content_str = ws_override + content_str
+                content = content_str.encode('utf-8')
+            
             return Response(
-                content=response.content,
+                content=content,
                 status_code=response.status_code,
                 headers=response_headers,
                 media_type=response.headers.get("content-type")
