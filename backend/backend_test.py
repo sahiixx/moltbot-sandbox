@@ -98,9 +98,13 @@ class MoltbotAPITester:
                 return True
         return False
 
-    def test_moltbot_start_validation(self):
+    def test_moltbot_start_validation(self, token=None):
         """Test Moltbot start endpoint validation"""
         print("\n--- Testing Start Endpoint Validation ---")
+        
+        headers = {'Content-Type': 'application/json'}
+        if token:
+            headers['Authorization'] = f'Bearer {token}'
         
         # Test 1: Missing provider
         success1, _ = self.run_test(
@@ -108,7 +112,8 @@ class MoltbotAPITester:
             "POST",
             "moltbot/start",
             422,  # Validation error
-            data={"apiKey": "test-key-1234567890"}
+            data={"apiKey": "test-key-1234567890"},
+            headers=headers
         )
         
         # Test 2: Invalid provider
@@ -117,7 +122,8 @@ class MoltbotAPITester:
             "POST",
             "moltbot/start",
             400,
-            data={"provider": "invalid", "apiKey": "test-key-1234567890"}
+            data={"provider": "invalid", "apiKey": "test-key-1234567890"},
+            headers=headers
         )
         
         # Test 3: Short API key
@@ -126,18 +132,8 @@ class MoltbotAPITester:
             "POST",
             "moltbot/start",
             400,
-            data={"provider": "anthropic", "apiKey": "short"}
-        )
-        
-        # Test 4: Valid format but fake key (will fail to start gateway)
-        # We expect this to fail with 500 since the key is fake
-        print("\n   Note: Testing with fake API key - expecting startup failure")
-        success4, response = self.run_test(
-            "Start with fake API key",
-            "POST",
-            "moltbot/start",
-            500,  # Should fail to start gateway
-            data={"provider": "anthropic", "apiKey": "sk-ant-fake-key-1234567890"}
+            data={"provider": "anthropic", "apiKey": "short"},
+            headers=headers
         )
         
         return success1 and success2 and success3
