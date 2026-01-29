@@ -76,8 +76,8 @@ class StatusCheckCreate(BaseModel):
 
 
 class MoltbotStartRequest(BaseModel):
-    provider: str  # "anthropic" or "openai"
-    apiKey: str
+    provider: str = "emergent"  # "emergent", "anthropic", or "openai"
+    apiKey: Optional[str] = None  # Optional - uses Emergent key if not provided
 
 
 class MoltbotStartResponse(BaseModel):
@@ -354,10 +354,14 @@ def generate_token():
     return secrets.token_hex(32)
 
 
-def create_moltbot_config(token: str):
-    """Create a Moltbot configuration file"""
+def create_moltbot_config(token: str, api_key: str = None):
+    """Create a Moltbot configuration file with Emergent provider"""
     os.makedirs(CONFIG_DIR, exist_ok=True)
     os.makedirs(WORKSPACE_DIR, exist_ok=True)
+    
+    # Use provided key or fallback to env
+    emergent_key = api_key or os.environ.get('EMERGENT_API_KEY', 'sk-emergent-54d8aE23aFf4e02159')
+    emergent_base_url = os.environ.get('EMERGENT_BASE_URL', 'https://integrations.emergentagent.com/llm/')
     
     config = {
         "gateway": {
@@ -373,9 +377,46 @@ def create_moltbot_config(token: str):
                 "allowInsecureAuth": True
             }
         },
+        "models": {
+            "mode": "merge",
+            "providers": {
+                "emergent": {
+                    "baseUrl": emergent_base_url,
+                    "apiKey": emergent_key,
+                    "api": "openai-completions",
+                    "models": [
+                        {
+                            "id": "openai/gpt-5.2",
+                            "name": "openai/gpt-5.2",
+                            "reasoning": True,
+                            "input": ["text"],
+                            "cost": {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0},
+                            "contextWindow": 400000,
+                            "maxTokens": 128000
+                        },
+                        {
+                            "id": "anthropic/claude-sonnet-4-5",
+                            "name": "anthropic/claude-sonnet-4-5",
+                            "reasoning": True,
+                            "input": ["text"],
+                            "cost": {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0},
+                            "contextWindow": 200000,
+                            "maxTokens": 64000
+                        }
+                    ]
+                }
+            }
+        },
         "agents": {
             "defaults": {
-                "workspace": WORKSPACE_DIR
+                "workspace": WORKSPACE_DIR,
+                "models": {
+                    "emergent/openai/gpt-5.2": {"alias": "gpt-5.2"},
+                    "emergent/anthropic/claude-sonnet-4-5": {"alias": "sonnet-4.5"}
+                },
+                "model": {
+                    "primary": "emergent/anthropic/claude-sonnet-4-5"
+                }
             }
         }
     }
