@@ -433,11 +433,11 @@ def create_moltbot_config(token: str, api_key: str = None):
     
     existing_config["agents"]["defaults"]["workspace"] = WORKSPACE_DIR
     existing_config["agents"]["defaults"]["models"] = {
-        "emergent/openai/gpt-5.2": {"alias": "gpt-5.2"},
-        "emergent/anthropic/claude-sonnet-4-5": {"alias": "sonnet-4.5"}
+        "emergent/gpt-5.2": {"alias": "gpt-5.2"},
+        "emergent/claude-sonnet-4-5": {"alias": "sonnet-4.5"}
     }
     existing_config["agents"]["defaults"]["model"] = {
-        "primary": "emergent/anthropic/claude-sonnet-4-5"
+        "primary": "emergent/claude-sonnet-4-5"
     }
     
     with open(CONFIG_FILE, "w") as f:
