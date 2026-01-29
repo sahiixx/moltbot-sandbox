@@ -111,9 +111,29 @@ Exit Criteria (Phase 2):
 4) Build minimal React setup page and redirect
 5) Comprehensive testing with testing agent and logs review
 
-## Next Actions
-- Proceed to Phase 1 POC now (install Node 22+, install Moltbot, configure basePath, reverse proxy)
-- After POC passes, implement full endpoints + frontend and run end-to-end tests
+## Status: COMPLETED ✅
+
+### Phase 1: POC - COMPLETED
+- ✅ Installed Node.js 22.22.0
+- ✅ Installed Moltbot (clawdbot) 2026.1.24-3 via official installer
+- ✅ Verified gateway can start and serve Control UI on port 18789
+- ✅ Implemented HTTP reverse proxy for Moltbot UI at /api/moltbot/ui/
+- ✅ Implemented WebSocket proxy for Moltbot at /api/moltbot/ws
+
+### Phase 2: Main App - COMPLETED
+- ✅ Built FastAPI backend with start/status/stop endpoints
+- ✅ Built React setup page with provider selection (Anthropic/OpenAI)
+- ✅ Dark theme matching Moltbot aesthetic (#FF4500 accent)
+- ✅ API key input with show/hide toggle
+- ✅ Loading states and progress indicator
+- ✅ Error handling and validation
+- ✅ Status check on page load
+- ✅ Redirect to Moltbot Control UI after successful start
+
+### Testing: PASSED 100%
+- Backend: All endpoints working correctly
+- Frontend: All UI features working correctly
+- Integration: Complete flow from setup to Control UI
 
 ## Success Criteria
 - From the preview URL, a user can:
