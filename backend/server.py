@@ -387,7 +387,7 @@ def create_moltbot_config(token: str, api_key: str = None):
         }
     }
     
-    # Emergent provider config - model IDs without provider prefix
+    # Emergent provider config - only GPT-5.2 (Claude has store param issue)
     emergent_provider = {
         "baseUrl": emergent_base_url,
         "apiKey": emergent_key,
@@ -401,15 +401,6 @@ def create_moltbot_config(token: str, api_key: str = None):
                 "cost": {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0},
                 "contextWindow": 400000,
                 "maxTokens": 128000
-            },
-            {
-                "id": "claude-sonnet-4-5",
-                "name": "Claude Sonnet 4.5",
-                "reasoning": True,
-                "input": ["text"],
-                "cost": {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0},
-                "contextWindow": 200000,
-                "maxTokens": 64000
             }
         ]
     }
@@ -425,7 +416,7 @@ def create_moltbot_config(token: str, api_key: str = None):
         existing_config["models"]["providers"] = {}
     existing_config["models"]["providers"]["emergent"] = emergent_provider
     
-    # Ensure agents defaults
+    # Ensure agents defaults - use GPT-5.2 only
     if "agents" not in existing_config:
         existing_config["agents"] = {"defaults": {}}
     if "defaults" not in existing_config["agents"]:
@@ -433,11 +424,10 @@ def create_moltbot_config(token: str, api_key: str = None):
     
     existing_config["agents"]["defaults"]["workspace"] = WORKSPACE_DIR
     existing_config["agents"]["defaults"]["models"] = {
-        "emergent/gpt-5.2": {"alias": "gpt-5.2"},
-        "emergent/claude-sonnet-4-5": {"alias": "sonnet-4.5"}
+        "emergent/gpt-5.2": {"alias": "gpt-5.2"}
     }
     existing_config["agents"]["defaults"]["model"] = {
-        "primary": "emergent/claude-sonnet-4-5"
+        "primary": "emergent/gpt-5.2"
     }
     
     with open(CONFIG_FILE, "w") as f:
