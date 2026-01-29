@@ -1,26 +1,26 @@
 [
   {
     "content": "Phase 3: Add Emergent Google Auth to protect Moltbot configuration",
-    "status": "in_progress"
+    "status": "completed"
   },
   {
     "content": "Phase 3: Create user model and session management in MongoDB",
-    "status": "pending"
+    "status": "completed"
   },
   {
     "content": "Phase 3: Update backend with auth endpoints (/auth/session, /auth/me, /auth/logout)",
-    "status": "pending"
+    "status": "completed"
   },
   {
     "content": "Phase 3: Make Moltbot config sticky to the user who configured it",
-    "status": "pending"
+    "status": "completed"
   },
   {
     "content": "Phase 3: Update frontend with login page and protected routes",
-    "status": "pending"
+    "status": "completed"
   },
   {
     "content": "Phase 3: Test auth flow end-to-end",
-    "status": "pending"
+    "status": "in_progress"
   }
 ]
