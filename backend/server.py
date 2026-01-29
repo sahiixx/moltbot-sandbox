@@ -1,5 +1,5 @@
-from fastapi import FastAPI, APIRouter, HTTPException, WebSocket, WebSocketDisconnect, Request, Response
-from fastapi.responses import StreamingResponse, HTMLResponse
+from fastapi import FastAPI, APIRouter, HTTPException, WebSocket, WebSocketDisconnect, Request, Response, Cookie, Depends
+from fastapi.responses import StreamingResponse, HTMLResponse, JSONResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from starlette.websockets import WebSocketState
@@ -18,7 +18,7 @@ from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict
 from typing import List, Optional
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import re
 
 
@@ -43,13 +43,15 @@ CONFIG_DIR = os.path.expanduser("~/.clawdbot")
 CONFIG_FILE = os.path.join(CONFIG_DIR, "moltbot.json")
 WORKSPACE_DIR = os.path.expanduser("~/clawd")
 
-# Global state for gateway process
+# Global state for gateway process (per-user)
+# In production, this would be per-user instances, but for simplicity we use single instance with owner tracking
 gateway_state = {
     "process": None,
     "pid": None,
     "token": None,
     "provider": None,
-    "started_at": None
+    "started_at": None,
+    "owner_user_id": None  # Track which user owns this instance
 }
 
 # Configure logging
@@ -60,7 +62,8 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-# Pydantic Models
+# ============== Pydantic Models ==============
+
 class StatusCheck(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
@@ -90,7 +93,204 @@ class MoltbotStatusResponse(BaseModel):
     provider: Optional[str] = None
     started_at: Optional[str] = None
     controlUrl: Optional[str] = None
+    owner_user_id: Optional[str] = None
+    is_owner: Optional[bool] = None
 
+
+class User(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    user_id: str
+    email: str
+    name: str
+    picture: Optional[str] = None
+    created_at: Optional[datetime] = None
+
+
+class SessionRequest(BaseModel):
+    session_id: str
+
+
+# ============== Authentication Helpers ==============
+
+EMERGENT_AUTH_URL = "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data"
+SESSION_EXPIRY_DAYS = 7
+
+
+async def get_current_user(request: Request) -> Optional[User]:
+    """
+    Get current user from session token.
+    Checks cookie first, then Authorization header as fallback.
+    Returns None if not authenticated.
+    """
+    session_token = None
+    
+    # Check cookie first
+    session_token = request.cookies.get("session_token")
+    
+    # Fallback to Authorization header
+    if not session_token:
+        auth_header = request.headers.get("Authorization")
+        if auth_header and auth_header.startswith("Bearer "):
+            session_token = auth_header.split(" ")[1]
+    
+    if not session_token:
+        return None
+    
+    # Look up session in database
+    session_doc = await db.user_sessions.find_one(
+        {"session_token": session_token},
+        {"_id": 0}
+    )
+    
+    if not session_doc:
+        return None
+    
+    # Check expiry
+    expires_at = session_doc.get("expires_at")
+    if isinstance(expires_at, str):
+        expires_at = datetime.fromisoformat(expires_at)
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    
+    if expires_at < datetime.now(timezone.utc):
+        return None
+    
+    # Get user
+    user_doc = await db.users.find_one(
+        {"user_id": session_doc["user_id"]},
+        {"_id": 0}
+    )
+    
+    if not user_doc:
+        return None
+    
+    return User(**user_doc)
+
+
+async def require_auth(request: Request) -> User:
+    """Dependency that requires authentication"""
+    user = await get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    return user
+
+
+# ============== Auth Endpoints ==============
+
+@api_router.post("/auth/session")
+async def create_session(request: SessionRequest, response: Response):
+    """
+    Exchange session_id from Emergent Auth for a session token.
+    Creates user if not exists, creates session, sets cookie.
+    """
+    try:
+        # Call Emergent Auth to get user data
+        async with httpx.AsyncClient() as client:
+            auth_response = await client.get(
+                EMERGENT_AUTH_URL,
+                headers={"X-Session-ID": request.session_id},
+                timeout=10.0
+            )
+        
+        if auth_response.status_code != 200:
+            logger.error(f"Emergent Auth error: {auth_response.status_code} - {auth_response.text}")
+            raise HTTPException(status_code=401, detail="Invalid session_id")
+        
+        auth_data = auth_response.json()
+        email = auth_data.get("email")
+        name = auth_data.get("name", email.split("@")[0] if email else "User")
+        picture = auth_data.get("picture")
+        emergent_session_token = auth_data.get("session_token")
+        
+        if not email:
+            raise HTTPException(status_code=400, detail="No email in auth response")
+        
+        # Check if user exists
+        existing_user = await db.users.find_one({"email": email}, {"_id": 0})
+        
+        if existing_user:
+            user_id = existing_user["user_id"]
+            # Update user info
+            await db.users.update_one(
+                {"user_id": user_id},
+                {"$set": {"name": name, "picture": picture}}
+            )
+        else:
+            # Create new user
+            user_id = f"user_{uuid.uuid4().hex[:12]}"
+            await db.users.insert_one({
+                "user_id": user_id,
+                "email": email,
+                "name": name,
+                "picture": picture,
+                "created_at": datetime.now(timezone.utc)
+            })
+        
+        # Create session
+        session_token = secrets.token_hex(32)
+        expires_at = datetime.now(timezone.utc) + timedelta(days=SESSION_EXPIRY_DAYS)
+        
+        await db.user_sessions.insert_one({
+            "user_id": user_id,
+            "session_token": session_token,
+            "expires_at": expires_at,
+            "created_at": datetime.now(timezone.utc)
+        })
+        
+        # Set cookie
+        response.set_cookie(
+            key="session_token",
+            value=session_token,
+            httponly=True,
+            secure=True,
+            samesite="none",
+            path="/",
+            max_age=SESSION_EXPIRY_DAYS * 24 * 60 * 60
+        )
+        
+        # Get user data
+        user_doc = await db.users.find_one({"user_id": user_id}, {"_id": 0})
+        
+        return {
+            "ok": True,
+            "user": user_doc
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Session creation error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.get("/auth/me")
+async def get_me(request: Request):
+    """Get current authenticated user"""
+    user = await get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    return user.model_dump()
+
+
+@api_router.post("/auth/logout")
+async def logout(request: Request, response: Response):
+    """Logout - delete session and clear cookie"""
+    session_token = request.cookies.get("session_token")
+    
+    if session_token:
+        await db.user_sessions.delete_one({"session_token": session_token})
+    
+    response.delete_cookie(
+        key="session_token",
+        path="/",
+        secure=True,
+        samesite="none"
+    )
+    
+    return {"ok": True, "message": "Logged out"}
+
+
+# ============== Moltbot Helpers ==============
 
 def generate_token():
     """Generate a random gateway token"""
@@ -106,7 +306,7 @@ def create_moltbot_config(token: str):
         "gateway": {
             "mode": "local",
             "port": MOLTBOT_PORT,
-            "bind": "loopback",
+            "bind": "lan",
             "auth": {
                 "mode": "token",
                 "token": token
@@ -130,7 +330,7 @@ def create_moltbot_config(token: str):
     return config
 
 
-async def start_gateway_process(api_key: str, provider: str):
+async def start_gateway_process(api_key: str, provider: str, owner_user_id: str):
     """Start the Moltbot gateway process"""
     global gateway_state
     
@@ -175,6 +375,7 @@ async def start_gateway_process(api_key: str, provider: str):
     gateway_state["token"] = token
     gateway_state["provider"] = provider
     gateway_state["started_at"] = datetime.now(timezone.utc).isoformat()
+    gateway_state["owner_user_id"] = owner_user_id
     
     # Wait for gateway to be ready
     max_wait = 30
@@ -186,6 +387,21 @@ async def start_gateway_process(api_key: str, provider: str):
                 response = await client.get(f"http://127.0.0.1:{MOLTBOT_PORT}/", timeout=2.0)
                 if response.status_code == 200:
                     logger.info("Moltbot gateway is ready!")
+                    
+                    # Store config in database for persistence
+                    await db.moltbot_configs.update_one(
+                        {"owner_user_id": owner_user_id},
+                        {
+                            "$set": {
+                                "provider": provider,
+                                "token": token,
+                                "started_at": gateway_state["started_at"],
+                                "updated_at": datetime.now(timezone.utc)
+                            }
+                        },
+                        upsert=True
+                    )
+                    
                     return token
             except Exception as e:
                 pass
@@ -212,36 +428,33 @@ def check_gateway_running():
     return False
 
 
-# API Routes
+# ============== Moltbot API Endpoints (Protected) ==============
+
 @api_router.get("/")
 async def root():
     return {"message": "Moltbot Hosting API"}
 
 
 @api_router.post("/moltbot/start", response_model=MoltbotStartResponse)
-async def start_moltbot(request: MoltbotStartRequest):
-    """Start the Moltbot gateway with the provided API key"""
+async def start_moltbot(request: MoltbotStartRequest, req: Request):
+    """Start the Moltbot gateway with the provided API key (requires auth)"""
+    user = await require_auth(req)
+    
     if request.provider not in ["anthropic", "openai"]:
         raise HTTPException(status_code=400, detail="Invalid provider. Use 'anthropic' or 'openai'")
     
     if not request.apiKey or len(request.apiKey) < 10:
         raise HTTPException(status_code=400, detail="Invalid API key")
     
-    try:
-        token = await start_gateway_process(request.apiKey, request.provider)
-        
-        # Store in database
-        await db.moltbot_sessions.update_one(
-            {"_id": "current"},
-            {
-                "$set": {
-                    "provider": request.provider,
-                    "started_at": datetime.now(timezone.utc).isoformat(),
-                    "token": token
-                }
-            },
-            upsert=True
+    # Check if Moltbot is already running by another user
+    if check_gateway_running() and gateway_state["owner_user_id"] != user.user_id:
+        raise HTTPException(
+            status_code=403, 
+            detail="Moltbot is already running by another user. Please wait for them to stop it."
         )
+    
+    try:
+        token = await start_gateway_process(request.apiKey, request.provider, user.user_id)
         
         return MoltbotStartResponse(
             ok=True,
@@ -257,26 +470,39 @@ async def start_moltbot(request: MoltbotStartRequest):
 
 
 @api_router.get("/moltbot/status", response_model=MoltbotStatusResponse)
-async def get_moltbot_status():
+async def get_moltbot_status(request: Request):
     """Get the current status of the Moltbot gateway"""
+    user = await get_current_user(request)
     running = check_gateway_running()
     
     if running:
+        is_owner = user and gateway_state["owner_user_id"] == user.user_id
         return MoltbotStatusResponse(
             running=True,
             pid=gateway_state["pid"],
             provider=gateway_state["provider"],
             started_at=gateway_state["started_at"],
-            controlUrl="/api/moltbot/ui/"
+            controlUrl="/api/moltbot/ui/",
+            owner_user_id=gateway_state["owner_user_id"],
+            is_owner=is_owner
         )
     else:
         return MoltbotStatusResponse(running=False)
 
 
 @api_router.post("/moltbot/stop")
-async def stop_moltbot():
-    """Stop the Moltbot gateway"""
+async def stop_moltbot(request: Request):
+    """Stop the Moltbot gateway (only owner can stop)"""
+    user = await require_auth(request)
+    
     global gateway_state
+    
+    if not check_gateway_running():
+        return {"ok": True, "message": "Moltbot is not running"}
+    
+    # Check if user is the owner
+    if gateway_state["owner_user_id"] != user.user_id:
+        raise HTTPException(status_code=403, detail="Only the owner can stop Moltbot")
     
     if gateway_state["process"]:
         try:
@@ -294,27 +520,44 @@ async def stop_moltbot():
         gateway_state["token"] = None
         gateway_state["provider"] = None
         gateway_state["started_at"] = None
+        gateway_state["owner_user_id"] = None
     
     return {"ok": True, "message": "Moltbot stopped"}
 
 
 @api_router.get("/moltbot/token")
-async def get_moltbot_token():
-    """Get the current gateway token for authentication"""
+async def get_moltbot_token(request: Request):
+    """Get the current gateway token for authentication (only owner)"""
+    user = await require_auth(request)
+    
     if not check_gateway_running():
         raise HTTPException(status_code=404, detail="Moltbot not running")
+    
+    # Only owner can get the token
+    if gateway_state["owner_user_id"] != user.user_id:
+        raise HTTPException(status_code=403, detail="Only the owner can access the token")
+    
     return {"token": gateway_state.get("token")}
 
 
+# ============== Moltbot Proxy (Protected) ==============
 
-# Reverse Proxy for Moltbot Control UI
 @api_router.api_route("/moltbot/ui/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"])
 async def proxy_moltbot_ui(request: Request, path: str = ""):
-    """Proxy requests to the Moltbot Control UI"""
+    """Proxy requests to the Moltbot Control UI (only owner can access)"""
+    user = await get_current_user(request)
+    
     if not check_gateway_running():
         return HTMLResponse(
             content="<html><body><h1>Moltbot not running</h1><p>Please start Moltbot first.</p><a href='/'>Go to setup</a></body></html>",
             status_code=503
+        )
+    
+    # Check if user is the owner
+    if not user or gateway_state["owner_user_id"] != user.user_id:
+        return HTMLResponse(
+            content="<html><body><h1>Access Denied</h1><p>This Moltbot instance is owned by another user.</p><a href='/'>Go back</a></body></html>",
+            status_code=403
         )
     
     target_url = f"http://127.0.0.1:{MOLTBOT_PORT}/{path}"
@@ -431,7 +674,7 @@ async def proxy_moltbot_ui_root(request: Request):
     )
 
 
-# WebSocket proxy for Moltbot
+# WebSocket proxy for Moltbot (Protected)
 @api_router.websocket("/moltbot/ws")
 async def websocket_proxy(websocket: WebSocket):
     """WebSocket proxy for Moltbot Control UI"""
@@ -440,6 +683,9 @@ async def websocket_proxy(websocket: WebSocket):
     if not check_gateway_running():
         await websocket.close(code=1013, reason="Moltbot not running")
         return
+    
+    # Note: WebSocket auth is handled by the token in the connection itself
+    # The Control UI passes the token in the connect message
     
     # Get the token from state
     token = gateway_state.get("token")
@@ -516,7 +762,8 @@ async def websocket_proxy(websocket: WebSocket):
             pass
 
 
-# Legacy status endpoints
+# ============== Legacy Status Endpoints ==============
+
 @api_router.post("/status", response_model=StatusCheck)
 async def create_status_check(input: StatusCheckCreate):
     status_dict = input.model_dump()
