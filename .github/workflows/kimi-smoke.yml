@@ -1,0 +1,59 @@
+name: Kimi smoke test
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    paths:
+      - '.github/workflows/**'
+      - 'README.md'
+      - 'docs/**'
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install prerequisites
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y curl ca-certificates xz-utils tar gzip bzip2 jq
+
+      - name: Download uv release and verify
+        env:
+          UV_VERSION: 0.9.28
+          ASSET: uv-x86_64-unknown-linux-gnu.tar.gz
+        run: |
+          set -euo pipefail
+          BASE="https://github.com/astral-sh/uv/releases/download/${UV_VERSION}"
+          TMPDIR=$(mktemp -d)
+          curl -fsSL "$BASE/$ASSET" -o "$TMPDIR/$ASSET"
+          curl -fsSL "$BASE/$ASSET.sha256" -o "$TMPDIR/$ASSET.sha256"
+          (cd "$TMPDIR" && sha256sum -c "$ASSET.sha256")
+          tar -xzf "$TMPDIR/$ASSET" -C "$TMPDIR"
+          mkdir -p "$HOME/.local/bin"
+          cp "$TMPDIR/uv-x86_64-unknown-linux-gnu/uv" "$HOME/.local/bin/"
+          chmod +x "$HOME/.local/bin/uv"
+          echo 'test -f "$HOME/.local/bin/env" && source "$HOME/.local/bin/env"' > "$HOME/.local/bin/env"
+          chmod +x "$HOME/.local/bin/env"
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Verify uv
+        run: |
+          uv --version
+          uv tool --help
+
+      - name: Install kimi-cli (may take a while)
+        run: |
+          uv tool install --python 3.13 kimi-cli
+          uv tool list
+
+      - name: Verify kimi
+        run: |
+          kimi --version
+          kimi --help --quiet
+          kimi --print --final-message-only --prompt "Smoke test: confirm kimi is working" >/tmp/kimi-output.txt
+          echo "Kimi output:" && sed -n '1,50p' /tmp/kimi-output.txt
