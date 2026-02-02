@@ -418,3 +418,58 @@ OpenClaw in Cloudflare Sandbox uses multiple authentication layers:
 - [OpenClaw Docs](https://docs.openclaw.ai/)
 - [Cloudflare Sandbox Docs](https://developers.cloudflare.com/sandbox/)
 - [Cloudflare Access Docs](https://developers.cloudflare.com/cloudflare-one/policies/access/)
+
+---
+
+## Kimi CLI (optional) 🔧
+
+A lightweight CLI agent that can help you interact with the repo and run local prompts. Install safely (verify checksums) and configure API keys before use.
+
+### Safe install (recommended) ✅
+
+1. Download the `uv` release for your platform and verify SHA256:
+
+```bash
+# example for x86_64 Linux
+curl -LO https://github.com/astral-sh/uv/releases/download/0.9.28/uv-x86_64-unknown-linux-gnu.tar.gz
+curl -LO https://github.com/astral-sh/uv/releases/download/0.9.28/uv-x86_64-unknown-linux-gnu.tar.gz.sha256
+sha256sum -c uv-x86_64-unknown-linux-gnu.tar.gz.sha256
+```
+
+2. Extract and install binaries to your local bin (no sudo):
+
+```bash
+tar -xzf uv-x86_64-unknown-linux-gnu.tar.gz
+mkdir -p "$HOME/.local/bin"
+cp uv uvx "$HOME/.local/bin/"
+chmod +x "$HOME/.local/bin/uv" "$HOME/.local/bin/uvx"
+# Add uv to your PATH for the current session
+export PATH="$HOME/.local/bin:$PATH"
+```
+
+3. Install Kimi with `uv`:
+
+```bash
+uv tool install --python 3.13 kimi-cli
+source "$HOME/.local/bin/env"
+echo 'test -f "$HOME/.local/bin/env" && source "$HOME/.local/bin/env"' >> ~/.profile
+```
+
+4. Verify installation:
+
+```bash
+kimi --version
+kimi --help
+```
+
+### Quick test
+
+```bash
+# Non-interactive prompt (prints final assistant message only)
+kimi --print --final-message-only --prompt "Summarize this repo and suggest 3 next steps for development"
+```
+
+### Notes & configuration ⚠️
+- Avoid `curl | bash` on untrusted URLs — prefer verifying checksums or running installers in disposable containers. 🔒
+- Kimi may require API keys (Anthropic/OpenAI/AI Gateway). For deployment, set secrets via Wrangler (e.g., `npx wrangler secret put ANTHROPIC_API_KEY`); for local usage, export `ANTHROPIC_API_KEY` in your shell.
+- If you want, I can add a dedicated `docs/KIMI.md` with full-step reproducible commands and a short audit log of what I ran.
