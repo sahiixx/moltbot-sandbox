@@ -451,6 +451,8 @@ export PATH="$HOME/.local/bin:$PATH"
 
 ```bash
 uv tool install --python 3.13 kimi-cli
+source "$HOME/.local/bin/env"
+echo 'test -f "$HOME/.local/bin/env" && source "$HOME/.local/bin/env"' >> ~/.profile
 ```
 
 4. Verify installation:
