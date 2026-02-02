@@ -26,9 +26,8 @@ tar -xzf uv-x86_64-unknown-linux-gnu.tar.gz
 mkdir -p "$HOME/.local/bin"
 cp uv uvx "$HOME/.local/bin/"
 chmod +x "$HOME/.local/bin/uv" "$HOME/.local/bin/uvx"
-# persist env for future shells
-echo 'test -f "$HOME/.local/bin/env" && source "$HOME/.local/bin/env"' >> ~/.profile
-source "$HOME/.local/bin/env"
+# Add uv to your PATH for the current session
+export PATH="$HOME/.local/bin:$PATH"
 ```
 
 3. Install Kimi via `uv`:
