@@ -1,69 +1,100 @@
-# MoltBot + Telegram Integration PRD
+# MoltBot / Clawdbot — Project Requirements Document
 
-## Problem Statement
-1. Install MoltBot (OpenClaw/clawdbot) on Emergent platform
-2. Configure Telegram bot API (token: 7957705342:AAGEeU3H387mfaWZ7EGBgwfRRi3fimZFSiU)
-3. "Do all" — start OpenClaw with Emergent provider, wire up all channels
+## Original Problem Statement
+Install MoltBot (Clawdbot), configure Telegram bot integration, set up the AI agent "Neo" end-to-end, and integrate 3 GitHub repositories "All in one":
+1. `https://github.com/sahiixx/500-AI-Agents-Projects`
+2. `https://github.com/sahiixx/system-prompts-and-models-of-ai-tools`
+3. `https://github.com/MoonshotAI/kimi-agent-sdk`
+
+Critical original requirement: slug generation must include high-entropy random suffix (≥32 bits).
 
 ## Architecture
-- **Frontend**: React (served via `serve -s build`) → port 3000
-- **Backend**: FastAPI (Python) → port 8001
-- **Database**: MongoDB → port 27017
-- **Gateway**: clawdbot (OpenClaw) → port 18789 (supervisor-managed)
-- **Proxy**: nginx-code-proxy
 
-## What Was Implemented
+```
+/app/
+├── backend/
+│   ├── server.py       # FastAPI backend — auth, openclaw, telegram, hub endpoints
+│   └── .env            # MONGO_URL, DB_NAME, EMERGENT_API_KEY, TELEGRAM_BOT_TOKEN
+├── frontend/
+│   └── src/
+│       ├── App.js               # Routes: /, /hub, /login
+│       └── pages/
+│           ├── SetupPage.js     # OpenClaw setup + Telegram config + AI Hub nav
+│           ├── HubPage.js       # AI Hub (Personas, Agent Directory, Kimi provider)
+│           ├── LoginPage.js
+│           └── AuthCallback.js
+└── memory/PRD.md
 
-### 2026-02-23: MoltBot Installation
-- LLM key fetched, restic restore of 1.679 GiB (147,221 files)
-- Frontend rebuilt with correct preview endpoint URLs
-- All services started via supervisor
+/root/
+├── .clawdbot/
+│   ├── clawdbot.json            # Telegram token, gateway config, LLM providers
+│   └── credentials/
+│       └── telegram-allowFrom.json  # Paired user IDs
+└── clawd/
+    ├── IDENTITY.md   # Active bot persona (switchable via AI Hub)
+    ├── SOUL.md
+    ├── USER.md
+    └── HEARTBEAT.md
+```
 
-### 2026-02-23: Telegram Bot Integration
-- Configured `channels.telegram.botToken` in `/root/.clawdbot/clawdbot.json`
-- `TELEGRAM_BOT_TOKEN` stored in `/app/backend/.env`
-- Gateway env (`/root/.clawdbot/gateway.env`) updated with Telegram token
-- Backend endpoint: `GET /api/telegram/status` — returns bot info from Telegram API
-- Backend endpoint: `POST /api/telegram/configure` — validates & updates bot token (auth required)
-- Frontend Telegram panel added to SetupPage: shows connected badge, bot name/username
-- Telegram webhook cleared; gateway polling cleanly as **@Clawdsahiixbot**
+## Tech Stack
+- **Frontend**: React + Craco, TailwindCSS, Shadcn/UI, Framer Motion
+- **Backend**: FastAPI (Python), Motor (MongoDB async)
+- **Database**: MongoDB
+- **AI Gateway**: Clawdbot (MoltBot) — supervisor-managed
+- **LLM**: Emergent Universal Key → Claude Sonnet 4.5 + GPT-5.2
+- **Telegram**: Bot token `7957705342:AAGEeU3H387mfaWZ7EGBgwfRRi3fimZFSiU` (@Clawdsahiixbot)
+- **Paired User**: Telegram ID 8252725134 (@Zeus920)
 
-### 2026-02-23: OpenClaw Gateway Started
-- Gateway configured with Emergent LLM (Claude Sonnet 4.5 + GPT-5.2)
-- Started via supervisor: `supervisorctl start clawdbot-gateway`
-- MongoDB gateway_config document synced (should_run=true)
+## What's Been Implemented
 
-## Services Running
-| Service          | Status  | Details                              |
-|-----------------|---------|--------------------------------------|
-| backend         | RUNNING | FastAPI on port 8001                 |
-| frontend        | RUNNING | React on port 3000                   |
-| mongodb         | RUNNING | Port 27017                           |
-| nginx-code-proxy| RUNNING | Reverse proxy                        |
-| clawdbot-gateway| RUNNING | Port 18789, Telegram @Clawdsahiixbot |
+### Phase 1 — Core Installation (Session 1)
+- MoltBot/Clawdbot installed and configured
+- Emergent LLM Key wired up
+- Services managed by Supervisor
 
-## API Endpoints
-- `GET /api/` — health check
+### Phase 2 — Telegram Integration
+- Telegram bot token configured in clawdbot.json + backend .env
+- `/api/telegram/status` and `/api/telegram/configure` endpoints
+- SetupPage shows Telegram connection status + config UI
+- User 8252725134 paired via `clawdbot pairing approve`
+- Agent persona configured (IDENTITY.md, USER.md, HEARTBEAT.md, SOUL.md)
+
+### Phase 3 — AI Hub (3 GitHub Repos Integration) [2026-02-23]
+- **Persona Library** (from system-prompts-and-models-of-ai-tools)
+  - 8 personas: Neo (Default), Cursor, Devin, Manus, Lovable, Perplexity, Claude Code, Notion AI
+  - `POST /api/hub/personas/apply` — writes new IDENTITY.md to /root/clawd/
+  - `GET /api/hub/personas` — returns personas with active flag
+- **Agent Directory** (from 500-AI-Agents-Projects)
+  - 35 curated AI agent use cases across 25 industries and 4 frameworks
+  - `GET /api/hub/agents` — with search, industry, framework filtering
+- **Kimi Provider** (from kimi-agent-sdk)
+  - `POST /api/hub/kimi/configure` — adds Moonshot as OpenAI-compatible provider
+  - Models: moonshot-v1-8k, 32k, 128k
+- New frontend route `/hub` → HubPage with 3 tabs
+- AI Hub navigation button added to SetupPage header
+
+## Key API Endpoints
+- `GET /api/hub/personas` — list personas (public)
+- `POST /api/hub/personas/apply` — apply persona (auth required)
+- `GET /api/hub/agents?q=&industry=&framework=` — agent directory (public)
+- `POST /api/hub/kimi/configure` — add Kimi LLM (auth required)
 - `GET /api/openclaw/status` — gateway status
-- `POST /api/openclaw/start` — start gateway (auth required)
-- `POST /api/openclaw/stop` — stop gateway (owner only)
-- `GET /api/telegram/status` — Telegram bot connection status
-- `POST /api/telegram/configure` — update Telegram bot token (auth required)
-- `GET /api/auth/me` — current user
-- `POST /api/auth/session` — create session from Emergent Auth
-
-## Telegram Bot
-- **Bot**: Clawd dbot
-- **Username**: @Clawdsahiixbot
-- **Bot ID**: 7957705342
-- **Status**: Active, polling via getUpdates
-
-## Tutorial Reference
-https://emergent.sh/tutorial/moltbot-on-emergent
+- `GET /api/telegram/status` — Telegram bot status
+- `POST /api/telegram/configure` — configure Telegram
 
 ## Prioritized Backlog
-- P1: WhatsApp QR pairing flow (infrastructure ready, no credentials needed)
-- P1: Instance ownership assignment on first login
-- P2: Telegram pairing approval UI (clawdbot pairing list/approve commands)
-- P2: Dashboard showing all connected channels
-- P3: Cron job management UI
+
+### P0 (Blockers)
+- LLM Key balance — user needs to top up Emergent Universal Key (Profile → Universal Key → Add Balance)
+
+### P1 (Next Up)
+- Verify slug generation entropy (≥32 bits) in Clawdbot source — original requirement never verified
+- Test applying different personas via Telegram and confirm bot behavior changes
+- Add more agent use cases (currently 35 of 500)
+
+### P2 (Future)
+- Add more system prompt tools (Windsurf, Replit, v0, GitHub Copilot personas)
+- WhatsApp integration (monitor is already wired, just needs setup)
+- Session history / conversation logs in the Hub UI
+- Export/import persona configurations
