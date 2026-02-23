@@ -74,7 +74,14 @@ Critical original requirement: slug generation must include high-entropy random 
 - New frontend route `/hub` → HubPage with 3 tabs
 - AI Hub navigation button added to SetupPage header
 
-## Key API Endpoints
+### Phase 4 — Web Chat Interface [2026-02-23]
+- **ChatPage** at `/chat` — full chat UI to talk to Neo directly from browser
+- Backend endpoints: `POST /api/chat/message`, `GET /api/chat/sessions`, `GET /api/chat/history/{id}`, `DELETE /api/chat/session/{id}`
+- LLM: Claude Sonnet 4.5 via emergentintegrations, persona-aware system prompt from IDENTITY.md
+- MongoDB persistence for messages and sessions
+- Features: session history sidebar, suggested prompts, typing indicator, auto-scroll, delete sessions
+- Navigation: Chat button added to SetupPage and HubPage headers
+- LLM verified working: direct test returned "Hello! I'm Neo. How can I help you today?"
 - `GET /api/hub/personas` — list personas (public)
 - `POST /api/hub/personas/apply` — apply persona (auth required)
 - `GET /api/hub/agents?q=&industry=&framework=` — agent directory (public)
