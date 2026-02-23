@@ -2382,6 +2382,10 @@ async def startup_event():
     whatsapp_watcher_task = asyncio.create_task(whatsapp_auto_fix_watcher())
     logger.info("[whatsapp-watcher] Background watcher task created (checks every 5s)")
 
+    # Start daily digest scheduler
+    digest_scheduler_task = asyncio.create_task(digest_scheduler())
+    logger.info("[digest-scheduler] Background task created (checks every 60s)")
+
 
 @app.on_event("shutdown")
 async def shutdown_db_client():

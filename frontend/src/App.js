@@ -29,6 +29,7 @@ function AppRouter() {
       <Route path="/hub" element={<HubPage />} />
       <Route path="/hub/compare" element={<ModelComparePage />} />
       <Route path="/hub/analytics" element={<AnalyticsPage />} />
+      <Route path="/hub/playground" element={<PlaygroundPage />} />
       <Route path="/chat" element={<ChatPage />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
