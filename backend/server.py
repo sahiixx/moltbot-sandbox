@@ -1538,7 +1538,6 @@ class KimiConfigRequest(BaseModel):
 @api_router.get("/hub/personas")
 async def get_hub_personas(request: Request):
     """Get available bot personas"""
-    user = await get_current_user(request)
     # Determine which persona is currently active
     current_name = ""
     try:
