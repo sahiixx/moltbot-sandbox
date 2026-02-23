@@ -538,7 +538,7 @@ export default function ChatPage() {
           )}
 
           {messages.map((msg, i) => (
-            <MessageBubble key={`${msg.session_id}-${i}`} msg={msg} isLast={i === messages.length - 1} />
+            <MessageBubble key={`${msg.session_id}-${i}-${msg.role}`} msg={msg} />
           ))}
 
           {sending && messages[messages.length - 1]?.role === 'user' && (
