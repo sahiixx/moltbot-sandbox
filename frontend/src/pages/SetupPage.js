@@ -80,6 +80,48 @@ export default function SetupPage() {
     } finally {
       setCheckingStatus(false);
     }
+    // Also check telegram status
+    fetchTelegramStatus();
+  };
+
+  const fetchTelegramStatus = async () => {
+    try {
+      const res = await fetch(`${API}/telegram/status`, { credentials: 'include' });
+      if (res.ok) {
+        const data = await res.json();
+        setTelegramStatus(data);
+      }
+    } catch (e) {
+      console.error('Telegram status check failed:', e);
+    }
+  };
+
+  const handleSaveTelegram = async () => {
+    if (!telegramToken.trim()) {
+      toast.error('Please enter a Telegram bot token');
+      return;
+    }
+    setSavingTelegram(true);
+    try {
+      const res = await fetch(`${API}/telegram/configure`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ bot_token: telegramToken.trim() })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        toast.success(`Telegram bot @${data.bot.username} connected!`);
+        setTelegramStatus({ connected: true, bot: data.bot });
+        setTelegramToken('');
+      } else {
+        toast.error(data.detail || 'Failed to configure Telegram');
+      }
+    } catch (e) {
+      toast.error('Failed to connect Telegram bot');
+    } finally {
+      setSavingTelegram(false);
+    }
   };
 
   const stageText = useMemo(() => {
