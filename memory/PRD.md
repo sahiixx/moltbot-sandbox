@@ -83,7 +83,13 @@ Critical original requirement: slug generation must include high-entropy random 
 - Navigation: Chat button added to SetupPage and HubPage headers
 - LLM verified working: direct test returned "Hello! I'm Neo. How can I help you today?"
 
-### Phase 6 — "All" Feature Batch [2026-02-23]
+### Phase 7 — Daily Digest [2026-02-23]
+- Background asyncio scheduler checks every 60s for configured digest time
+- Fetches last 24h of chat messages, summarises with Claude Sonnet, delivers to Telegram
+- 4 endpoints: GET/POST /digest/config, POST /digest/trigger, GET /digest/history
+- Frontend DigestCard in SetupPage: toggle, UTC time picker, Send Now, past digest history
+- Fixed include_router placement (moved to end of server.py so all routes register correctly)
+
 - **Voice Input**: Mic button in chat → browser MediaRecorder → Whisper-1 transcription → fills input field
 - **Smart Persona Auto-Routing**: Detects message intent (coding/writing/research/UI/autonomous) and suggests persona switch inline. Rule-based classifier, 8 intent categories. `POST /api/hub/personas/detect`
 - **WhatsApp Setup UI**: WhatsApp card added to SetupPage showing connection status and `clawdbot whatsapp link` instructions
