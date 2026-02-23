@@ -9,7 +9,10 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { ArrowLeft, Search, ExternalLink, CheckCircle2, Loader2, Zap, Eye, EyeOff, User, LogOut } from 'lucide-react';
+import {
+  ArrowLeft, Search, ExternalLink, CheckCircle2, Loader2, Zap, Eye, EyeOff,
+  User, LogOut, MessageSquare
+} from 'lucide-react';
 import OpenClaw from '@/components/ui/icons/OpenClaw';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || '';
@@ -225,6 +228,16 @@ export default function HubPage() {
                 <span className="hidden sm:inline text-xs">{user.name}</span>
               </div>
             )}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => navigate('/chat')}
+              data-testid="hub-chat-btn"
+              className="text-zinc-400 hover:text-zinc-200 hover:bg-[#1f2022] gap-2"
+            >
+              <MessageSquare className="w-4 h-4" />
+              <span className="hidden sm:inline text-xs">Chat</span>
+            </Button>
             <Button
               variant="ghost"
               size="sm"
