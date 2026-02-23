@@ -82,6 +82,12 @@ Critical original requirement: slug generation must include high-entropy random 
 - Features: session history sidebar, suggested prompts, typing indicator, auto-scroll, delete sessions
 - Navigation: Chat button added to SetupPage and HubPage headers
 - LLM verified working: direct test returned "Hello! I'm Neo. How can I help you today?"
+
+### Phase 5 — Typewriter Animation + Markdown Rendering [2026-02-23]
+- Typewriter animation for Neo's responses — adaptive speed, reveals character-by-character
+- Full markdown rendering: code blocks with copy button, tables, lists, blockquotes, inline code
+- Blinking cursor shown while text is being revealed
+- react-markdown + remark-gfm installed
 - `GET /api/hub/personas` — list personas (public)
 - `POST /api/hub/personas/apply` — apply persona (auth required)
 - `GET /api/hub/agents?q=&industry=&framework=` — agent directory (public)
