@@ -288,7 +288,7 @@ export default function SetupPage() {
             </p>
           </div>
           
-          {/* User info and logout */}
+          {/* User info, hub link, and logout */}
           <div className="flex items-center gap-3">
             {user && (
               <div className="flex items-center gap-2 text-sm text-zinc-400">
@@ -304,6 +304,16 @@ export default function SetupPage() {
                 <span className="hidden sm:inline">{user.name}</span>
               </div>
             )}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => navigate('/hub')}
+              data-testid="hub-nav-button"
+              className="text-zinc-400 hover:text-zinc-200 hover:bg-[#1f2022] gap-2"
+            >
+              <LayoutGrid className="w-4 h-4" />
+              <span className="hidden sm:inline">AI Hub</span>
+            </Button>
             <Button
               variant="ghost"
               size="sm"
