@@ -2451,3 +2451,8 @@ async def shutdown_db_client():
     logger.info("Backend shutting down - gateway will continue running via supervisor")
 
     client.close()
+
+
+# Include the router LAST — after all @api_router route definitions above
+app.include_router(api_router)
+
