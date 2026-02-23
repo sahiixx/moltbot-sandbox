@@ -3,9 +3,11 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import {
   Plus, Send, Trash2, Loader2, ArrowLeft, MessageSquare,
-  LayoutGrid, User, LogOut, ChevronLeft, ChevronRight
+  LayoutGrid, User, LogOut, ChevronLeft, ChevronRight, Copy, Check
 } from 'lucide-react';
 import OpenClaw from '@/components/ui/icons/OpenClaw';
 
