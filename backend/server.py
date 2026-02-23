@@ -22,6 +22,7 @@ from datetime import datetime, timezone, timedelta
 # WhatsApp monitoring
 from whatsapp_monitor import get_whatsapp_status, fix_registered_flag
 from emergentintegrations.llm.chat import LlmChat, UserMessage
+from emergentintegrations.llm.openai import OpenAISpeechToText
 # Gateway management (supervisor-based)
 from gateway_config import write_gateway_env, clear_gateway_env
 from supervisor_client import SupervisorClient
