@@ -21,8 +21,134 @@ function formatTime(isoStr) {
   } catch { return ''; }
 }
 
-function MessageBubble({ msg, isLast }) {
+// ===== Markdown code block with copy button =====
+function CodeBlock({ children, className }) {
+  const [copied, setCopied] = useState(false);
+  const code = String(children).replace(/\n$/, '');
+  const lang = (className || '').replace('language-', '') || 'code';
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(code).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
+  return (
+    <div className="relative group my-2 rounded-xl overflow-hidden border border-[#2a2a2e]">
+      <div className="flex items-center justify-between px-4 py-1.5 bg-[#111113] border-b border-[#2a2a2e]">
+        <span className="text-[10px] text-zinc-500 font-mono uppercase tracking-wide">{lang}</span>
+        <button
+          onClick={handleCopy}
+          className="flex items-center gap-1.5 text-[10px] text-zinc-500 hover:text-zinc-300 transition-colors"
+          data-testid="copy-code-btn"
+        >
+          {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+          {copied ? 'Copied' : 'Copy'}
+        </button>
+      </div>
+      <pre className="bg-[#0d0d0f] px-4 py-3 overflow-x-auto">
+        <code className="text-sm text-zinc-200 font-mono leading-relaxed">{code}</code>
+      </pre>
+    </div>
+  );
+}
+
+// ===== Markdown components config =====
+const markdownComponents = {
+  code({ node, inline, className, children, ...props }) {
+    if (inline) {
+      return (
+        <code className="bg-[#1f2022] text-[#FF6B35] rounded px-1.5 py-0.5 text-xs font-mono" {...props}>
+          {children}
+        </code>
+      );
+    }
+    return <CodeBlock className={className}>{children}</CodeBlock>;
+  },
+  p({ children }) {
+    return <p className="mb-3 last:mb-0 leading-relaxed">{children}</p>;
+  },
+  h1({ children }) { return <h1 className="text-lg font-bold mb-2 mt-3 text-zinc-100">{children}</h1>; },
+  h2({ children }) { return <h2 className="text-base font-bold mb-2 mt-3 text-zinc-100">{children}</h2>; },
+  h3({ children }) { return <h3 className="text-sm font-bold mb-1 mt-2 text-zinc-200">{children}</h3>; },
+  ul({ children }) { return <ul className="list-disc pl-5 mb-3 space-y-1 text-zinc-300">{children}</ul>; },
+  ol({ children }) { return <ol className="list-decimal pl-5 mb-3 space-y-1 text-zinc-300">{children}</ol>; },
+  li({ children }) { return <li className="text-sm leading-relaxed">{children}</li>; },
+  blockquote({ children }) {
+    return (
+      <blockquote className="border-l-2 border-[#FF4500]/50 pl-3 my-2 text-zinc-400 italic text-sm">
+        {children}
+      </blockquote>
+    );
+  },
+  strong({ children }) { return <strong className="font-semibold text-zinc-100">{children}</strong>; },
+  a({ href, children }) {
+    return (
+      <a href={href} target="_blank" rel="noreferrer"
+        className="text-[#FF6B35] hover:underline underline-offset-2">
+        {children}
+      </a>
+    );
+  },
+  hr() { return <hr className="border-[#252528] my-3" />; },
+  table({ children }) {
+    return (
+      <div className="overflow-x-auto my-3">
+        <table className="text-sm w-full border-collapse">{children}</table>
+      </div>
+    );
+  },
+  th({ children }) {
+    return <th className="border border-[#2a2a2e] px-3 py-1.5 bg-[#111113] text-left text-zinc-300 font-semibold text-xs">{children}</th>;
+  },
+  td({ children }) {
+    return <td className="border border-[#2a2a2e] px-3 py-1.5 text-zinc-400 text-xs">{children}</td>;
+  },
+};
+
+// ===== Typewriter hook =====
+function useTypewriter(fullText, isNew) {
+  const [displayed, setDisplayed] = useState('');
+  const [done, setDone] = useState(false);
+
+  useEffect(() => {
+    if (!isNew || !fullText) {
+      setDisplayed(fullText || '');
+      setDone(true);
+      return;
+    }
+    setDisplayed('');
+    setDone(false);
+    let i = 0;
+    // Adaptive speed: longer text = faster
+    const speed = fullText.length > 500 ? 6 : fullText.length > 200 ? 10 : 18;
+    const interval = setInterval(() => {
+      i += Math.ceil(fullText.length / 120); // advance multiple chars per tick for speed
+      if (i >= fullText.length) {
+        setDisplayed(fullText);
+        setDone(true);
+        clearInterval(interval);
+      } else {
+        setDisplayed(fullText.slice(0, i));
+      }
+    }, speed);
+    return () => clearInterval(interval);
+  }, [fullText, isNew]);
+
+  return { displayed, done };
+}
+
+// ===== Message bubble =====
+function MessageBubble({ msg, isStreaming }) {
   const isUser = msg.role === 'user';
+  const { displayed, done } = useTypewriter(
+    msg.content,
+    !isUser && !!msg._isNew
+  );
+
+  const text = isUser ? msg.content : displayed;
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 8 }}
@@ -35,15 +161,23 @@ function MessageBubble({ msg, isLast }) {
         ${isUser ? 'bg-[#FF4500]/20 text-[#FF4500]' : 'bg-zinc-800 text-zinc-300'}`}>
         {isUser ? 'U' : '🦞'}
       </div>
+
       {/* Bubble */}
-      <div className={`max-w-[80%] sm:max-w-[70%] group`}>
-        <div className={`rounded-2xl px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap break-words
-          ${isUser
-            ? 'bg-[#FF4500] text-white rounded-br-sm'
-            : 'bg-[#1a1a1c] text-zinc-200 rounded-bl-sm border border-[#252528]'
-          }`}>
-          {msg.content}
-        </div>
+      <div className="max-w-[82%] sm:max-w-[72%]">
+        {isUser ? (
+          <div className="rounded-2xl rounded-br-sm px-4 py-2.5 bg-[#FF4500] text-white text-sm leading-relaxed whitespace-pre-wrap break-words">
+            {text}
+          </div>
+        ) : (
+          <div className="rounded-2xl rounded-bl-sm px-4 py-3 bg-[#1a1a1c] border border-[#252528] text-zinc-200 text-sm">
+            <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+              {text}
+            </ReactMarkdown>
+            {!done && (
+              <span className="inline-block w-1.5 h-4 bg-zinc-400 ml-0.5 animate-pulse rounded-sm align-middle" />
+            )}
+          </div>
+        )}
         <div className={`text-[10px] text-zinc-600 mt-1 px-1 ${isUser ? 'text-right' : 'text-left'}`}>
           {formatTime(msg.created_at)}
         </div>
