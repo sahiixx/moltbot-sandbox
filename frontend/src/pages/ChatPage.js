@@ -635,7 +635,71 @@ export default function ChatPage() {
 
         {/* Input area */}
         <div className="relative z-10 border-t border-[#1f2022] bg-[#0f0f10] p-4">
-          <div className="flex gap-2 items-end max-w-3xl mx-auto">
+          {/* Persona suggestion pill */}
+        <AnimatePresence>
+          {personaSuggestion && (
+            <motion.div
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 4 }}
+              className="max-w-3xl mx-auto mb-2"
+            >
+              <div className="flex items-center gap-2 text-xs text-zinc-400 bg-[#141416] border border-[#1f2022] rounded-lg px-3 py-2">
+                <Zap className="w-3 h-3 text-[#FF4500] flex-shrink-0" />
+                <span>
+                  Switch to <span className="text-zinc-200 font-medium">{personaSuggestion.persona?.emoji} {personaSuggestion.persona?.name}</span> for this?
+                </span>
+                <button
+                  data-testid="apply-persona-suggestion"
+                  onClick={async () => {
+                    try {
+                      const res = await fetch(`${API}/hub/personas/apply`, {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        credentials: 'include',
+                        body: JSON.stringify({ persona_id: personaSuggestion.persona_id })
+                      });
+                      if (res.ok) {
+                        toast.success(`Switched to ${personaSuggestion.persona?.name} mode`);
+                        fetchActivePersona();
+                        setPersonaSuggestion(null);
+                      }
+                    } catch { toast.error('Failed to switch persona'); }
+                  }}
+                  className="ml-auto text-[#FF4500] hover:text-[#ff6b35] font-medium transition-colors"
+                >
+                  Switch
+                </button>
+                <button onClick={() => setPersonaSuggestion(null)} className="text-zinc-600 hover:text-zinc-400">✕</button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Input row */}
+        <div className="flex gap-2 items-end max-w-3xl mx-auto">
+          {/* Mic button */}
+          <Button
+            type="button"
+            data-testid="mic-btn"
+            onClick={recording ? stopRecording : startRecording}
+            disabled={transcribing || sending}
+            title={recording ? 'Stop recording' : 'Voice input'}
+            className={`flex-shrink-0 h-12 w-12 rounded-xl p-0 transition-all ${
+              recording
+                ? 'bg-red-500 hover:bg-red-600 text-white animate-pulse'
+                : transcribing
+                ? 'bg-[#1f2022] text-zinc-400'
+                : 'bg-[#1f2022] hover:bg-[#2a2a2e] text-zinc-400 hover:text-zinc-200'
+            }`}
+          >
+            {transcribing ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : recording ? (
+              <MicOff className="w-4 h-4" />
+            ) : (
+              <Mic className="w-4 h-4" />
+            )}
+          </Button>
             <div className="flex-1 relative">
               <textarea
                 ref={inputRef}
