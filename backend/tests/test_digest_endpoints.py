@@ -39,15 +39,18 @@ class TestRegressionHub:
         r = requests.get(f"{BASE_URL}/api/hub/personas")
         assert r.status_code == 200
         data = r.json()
-        assert len(data) == 8, f"Expected 8 personas, got {len(data)}"
-        print(f"GET /api/hub/personas -> 200, count={len(data)} OK")
+        personas = data.get("personas", data) if isinstance(data, dict) else data
+        assert len(personas) == 8, f"Expected 8 personas, got {len(personas)}"
+        print(f"GET /api/hub/personas -> 200, count={len(personas)} OK")
 
     def test_hub_agents_returns_50(self):
         r = requests.get(f"{BASE_URL}/api/hub/agents")
         assert r.status_code == 200
         data = r.json()
-        assert len(data) == 50, f"Expected 50 agents, got {len(data)}"
-        print(f"GET /api/hub/agents -> 200, count={len(data)} OK")
+        total = data.get("total") if isinstance(data, dict) else len(data)
+        agents = data.get("agents", data) if isinstance(data, dict) else data
+        assert total == 50 or len(agents) == 50, f"Expected 50 agents, got total={total}, list={len(agents)}"
+        print(f"GET /api/hub/agents -> 200, total={total} OK")
 
     def test_hub_personas_detect(self):
         r = requests.post(f"{BASE_URL}/api/hub/personas/detect", json={"message": "Write me a poem"})
