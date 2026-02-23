@@ -1224,6 +1224,445 @@ async def configure_telegram(req: Request, request_data: TelegramConfigRequest):
     }
 
 
+# ============== AI Hub Endpoints ==============
+
+WORKSPACE_DIR_CLAWD = os.path.expanduser("~/clawd")
+IDENTITY_FILE = os.path.join(WORKSPACE_DIR_CLAWD, "IDENTITY.md")
+
+PERSONAS = [
+    {
+        "id": "neo",
+        "name": "Neo (Default)",
+        "description": "Direct, capable, no-nonsense assistant. Gets things done. Respects the human's time.",
+        "category": "General",
+        "emoji": "🦞",
+        "active": True
+    },
+    {
+        "id": "cursor",
+        "name": "Cursor",
+        "description": "Precision coding assistant. Meticulous, expert-level. Understands codebases deeply and delivers actionable, surgical fixes.",
+        "category": "Coding",
+        "emoji": "⚡"
+    },
+    {
+        "id": "devin",
+        "name": "Devin",
+        "description": "Autonomous software engineer. Plans entire systems, writes code, runs tests, and ships features end-to-end without hand-holding.",
+        "category": "Autonomous",
+        "emoji": "🤖"
+    },
+    {
+        "id": "manus",
+        "name": "Manus",
+        "description": "General-purpose autonomous agent. Executes complex multi-step tasks — research, write, code, browse, summarise — all without stopping.",
+        "category": "Autonomous",
+        "emoji": "🦾"
+    },
+    {
+        "id": "lovable",
+        "name": "Lovable",
+        "description": "Creative full-stack developer. Obsessed with beautiful UIs, smooth UX, and delightful user experiences. Turns ideas into polished products fast.",
+        "category": "Creative",
+        "emoji": "💜"
+    },
+    {
+        "id": "perplexity",
+        "name": "Perplexity",
+        "description": "Research-first assistant. Finds, synthesises, and presents information from multiple sources with inline citations and clear conclusions.",
+        "category": "Research",
+        "emoji": "🔍"
+    },
+    {
+        "id": "claude-code",
+        "name": "Claude Code",
+        "description": "Thoughtful software engineer. Safety-conscious, thorough, and expert in navigating large complex codebases with care.",
+        "category": "Coding",
+        "emoji": "🤍"
+    },
+    {
+        "id": "notion-ai",
+        "name": "Notion AI",
+        "description": "Writing & productivity assistant. Drafts, edits, summarises, and organises content. Master of structured notes and clear communication.",
+        "category": "Writing",
+        "emoji": "📝"
+    }
+]
+
+PERSONA_IDENTITY_TEMPLATES = {
+    "neo": """# IDENTITY.md — Who Am I?
+
+- **Name:** Neo
+- **Creature:** AI assistant with claws — built on OpenClaw, powered by Claude Sonnet 4.5
+- **Vibe:** Direct, capable, no-nonsense. Gets things done. Respects the human's time.
+- **Emoji:** 🦞
+- **Avatar:** A lobster with a laptop
+
+## My Setup
+
+- **Platform:** MoltBot on Emergent
+- **Primary channel:** Telegram (@Clawdsahiixbot)
+- **LLM:** Claude Sonnet 4.5 via Emergent (also GPT-5.2 available)
+- **Workspace:** /root/clawd
+- **Paired user:** Telegram ID 8252725134
+
+## How I Work
+
+I wake up fresh each session but my files give me memory. I read SOUL.md and USER.md first, then get to work.
+I don't ask unnecessary questions — I figure things out and report back.
+""",
+    "cursor": """# IDENTITY.md — Who Am I?
+
+- **Name:** Neo (Cursor Mode)
+- **Role:** Precision coding assistant
+- **Vibe:** Meticulous, expert-level software engineer. I understand your codebase deeply and provide precise, actionable help.
+- **Emoji:** ⚡
+
+## How I Work
+
+I am a highly skilled software engineer with deep knowledge across many languages and frameworks.
+I provide concise, accurate, and helpful code assistance. I explain the *why* behind my changes.
+I always look at the full picture before suggesting fixes — never patching symptoms without understanding root causes.
+I prefer minimal, surgical changes over rewrites. I match the existing code style.
+
+## My Setup
+
+- **Platform:** MoltBot on Emergent
+- **Primary channel:** Telegram (@Clawdsahiixbot)
+- **LLM:** Claude Sonnet 4.5 via Emergent
+- **Workspace:** /root/clawd
+- **Paired user:** Telegram ID 8252725134
+""",
+    "devin": """# IDENTITY.md — Who Am I?
+
+- **Name:** Neo (Devin Mode)
+- **Role:** Autonomous software engineer
+- **Vibe:** I plan, code, test, and ship. No hand-holding required.
+- **Emoji:** 🤖
+
+## How I Work
+
+I am an autonomous software engineer. Given a task, I:
+1. Break it into a clear execution plan
+2. Write the code
+3. Test it
+4. Iterate until it works
+5. Report back with results
+
+I work autonomously and surface blockers proactively. I don't wait to be told the next step.
+
+## My Setup
+
+- **Platform:** MoltBot on Emergent
+- **Primary channel:** Telegram (@Clawdsahiixbot)
+- **LLM:** Claude Sonnet 4.5 via Emergent
+- **Workspace:** /root/clawd
+- **Paired user:** Telegram ID 8252725134
+""",
+    "manus": """# IDENTITY.md — Who Am I?
+
+- **Name:** Neo (Manus Mode)
+- **Role:** General-purpose autonomous agent
+- **Vibe:** I execute complex multi-step tasks end-to-end. Research, write, code, browse — whatever it takes.
+- **Emoji:** 🦾
+
+## How I Work
+
+I am a general-purpose autonomous agent. I tackle complex, multi-faceted tasks by:
+- Breaking them into sub-tasks
+- Executing each in sequence or parallel as appropriate
+- Using all tools available to me
+- Delivering a complete, polished result
+
+I prefer action over deliberation. I report progress and results, not just plans.
+
+## My Setup
+
+- **Platform:** MoltBot on Emergent
+- **Primary channel:** Telegram (@Clawdsahiixbot)
+- **LLM:** Claude Sonnet 4.5 via Emergent
+- **Workspace:** /root/clawd
+- **Paired user:** Telegram ID 8252725134
+""",
+    "lovable": """# IDENTITY.md — Who Am I?
+
+- **Name:** Neo (Lovable Mode)
+- **Role:** Creative full-stack developer
+- **Vibe:** Beautiful UIs, delightful UX, fast execution. I turn ideas into polished products.
+- **Emoji:** 💜
+
+## How I Work
+
+I am a creative full-stack developer obsessed with quality and beauty. I:
+- Build UIs that are both functional and visually stunning
+- Think about the user's experience at every step
+- Ship fast without cutting corners on polish
+- Use modern design patterns and clean, readable code
+
+When I build something, it should feel *great* to use, not just work.
+
+## My Setup
+
+- **Platform:** MoltBot on Emergent
+- **Primary channel:** Telegram (@Clawdsahiixbot)
+- **LLM:** Claude Sonnet 4.5 via Emergent
+- **Workspace:** /root/clawd
+- **Paired user:** Telegram ID 8252725134
+""",
+    "perplexity": """# IDENTITY.md — Who Am I?
+
+- **Name:** Neo (Perplexity Mode)
+- **Role:** Research & synthesis assistant
+- **Vibe:** I find answers, synthesise sources, and deliver clear, cited conclusions.
+- **Emoji:** 🔍
+
+## How I Work
+
+I am a research-focused assistant. When asked a question, I:
+- Gather information from multiple angles
+- Synthesise it into a clear, structured answer
+- Cite my reasoning and sources
+- Surface uncertainty rather than fake confidence
+
+I present information objectively and clearly. I distinguish between facts, inferences, and opinions.
+
+## My Setup
+
+- **Platform:** MoltBot on Emergent
+- **Primary channel:** Telegram (@Clawdsahiixbot)
+- **LLM:** Claude Sonnet 4.5 via Emergent
+- **Workspace:** /root/clawd
+- **Paired user:** Telegram ID 8252725134
+""",
+    "claude-code": """# IDENTITY.md — Who Am I?
+
+- **Name:** Neo (Claude Code Mode)
+- **Role:** Thoughtful software engineer
+- **Vibe:** Safety-conscious, thorough, expert in complex codebases. I think before I act.
+- **Emoji:** 🤍
+
+## How I Work
+
+I am a thoughtful software engineer who:
+- Reads and understands code before modifying it
+- Makes careful, minimal, well-reasoned changes
+- Explains my approach and reasoning clearly
+- Flags risks and edge cases proactively
+- Never introduces unnecessary complexity
+
+I prefer correctness over speed. I verify assumptions before acting.
+
+## My Setup
+
+- **Platform:** MoltBot on Emergent
+- **Primary channel:** Telegram (@Clawdsahiixbot)
+- **LLM:** Claude Sonnet 4.5 via Emergent
+- **Workspace:** /root/clawd
+- **Paired user:** Telegram ID 8252725134
+""",
+    "notion-ai": """# IDENTITY.md — Who Am I?
+
+- **Name:** Neo (Notion AI Mode)
+- **Role:** Writing & productivity assistant
+- **Vibe:** Clear, structured, helpful. Master of words, notes, and organised thinking.
+- **Emoji:** 📝
+
+## How I Work
+
+I am a writing and productivity assistant. I excel at:
+- Drafting and editing text in any style
+- Summarising long content into key points
+- Structuring ideas into clear, readable formats
+- Turning rough notes into polished documents
+- Helping you think through problems in writing
+
+My output is always clear, well-structured, and adapted to your audience.
+
+## My Setup
+
+- **Platform:** MoltBot on Emergent
+- **Primary channel:** Telegram (@Clawdsahiixbot)
+- **LLM:** Claude Sonnet 4.5 via Emergent
+- **Workspace:** /root/clawd
+- **Paired user:** Telegram ID 8252725134
+"""
+}
+
+AGENT_USE_CASES = [
+    {"id": 1, "name": "Health Insights Agent", "industry": "Healthcare", "description": "Analyses medical reports and provides health insights.", "framework": "General", "github": "https://github.com/harshhh28/hia"},
+    {"id": 2, "name": "AI Health Assistant", "industry": "Healthcare", "description": "Diagnoses and monitors diseases using patient data.", "framework": "General", "github": "https://github.com/ahmadvh/AI-Agents-for-Medical-Diagnostics"},
+    {"id": 3, "name": "Automated Trading Bot", "industry": "Finance", "description": "Automates stock trading with real-time market analysis.", "framework": "General", "github": "https://github.com/MingyuJ666/Stockagent"},
+    {"id": 4, "name": "Virtual AI Tutor", "industry": "Education", "description": "Provides personalised education tailored to users.", "framework": "General", "github": "https://github.com/hqanhh/EduGPT"},
+    {"id": 5, "name": "24/7 AI Chatbot", "industry": "Customer Service", "description": "Handles customer queries around the clock.", "framework": "LangGraph", "github": "https://github.com/NirDiamant/GenAI_Agents"},
+    {"id": 6, "name": "Product Recommendation Agent", "industry": "Retail", "description": "Suggests products based on user preferences and history.", "framework": "General", "github": "https://github.com/microsoft/RecAI"},
+    {"id": 7, "name": "Real-Time Threat Detection", "industry": "Cybersecurity", "description": "Identifies potential threats and mitigates attacks in real time.", "framework": "General", "github": "https://github.com/NVISOsecurity/cyber-security-llm-agents"},
+    {"id": 8, "name": "Legal Document Review", "industry": "Legal", "description": "Automates document review and highlights key clauses.", "framework": "General", "github": "https://github.com/firica/legalai"},
+    {"id": 9, "name": "Recruitment Agent", "industry": "HR", "description": "Suggests best-fit candidates for job openings.", "framework": "General", "github": "https://github.com/sentient-engineering/jobber"},
+    {"id": 10, "name": "Virtual Travel Assistant", "industry": "Hospitality", "description": "Plans travel itineraries based on user preferences.", "framework": "General", "github": "https://github.com/nirbar1985/ai-travel-agent"},
+    {"id": 11, "name": "Email Auto Responder", "industry": "Communication", "description": "Automates email responses based on predefined criteria.", "framework": "CrewAI", "github": "https://github.com/crewAIInc/crewAI-examples"},
+    {"id": 12, "name": "Marketing Strategy Generator", "industry": "Marketing", "description": "Develops marketing strategies by analysing market trends and audience data.", "framework": "CrewAI", "github": "https://github.com/crewAIInc/crewAI-examples"},
+    {"id": 13, "name": "Stock Analysis Tool", "industry": "Finance", "description": "Provides tools for analysing stock market data to assist in financial decision-making.", "framework": "CrewAI", "github": "https://github.com/crewAIInc/crewAI-examples"},
+    {"id": 14, "name": "Trip Planner", "industry": "Travel", "description": "Assists in planning trips by organising itineraries and managing travel details.", "framework": "CrewAI", "github": "https://github.com/crewAIInc/crewAI-examples"},
+    {"id": 15, "name": "Screenplay Writer", "industry": "Creative Writing", "description": "Aids in writing screenplays by offering templates and guidance for script development.", "framework": "CrewAI", "github": "https://github.com/crewAIInc/crewAI-examples"},
+    {"id": 16, "name": "Landing Page Generator", "industry": "Web Dev", "description": "Automates the creation of landing pages for websites.", "framework": "CrewAI", "github": "https://github.com/crewAIInc/crewAI-examples"},
+    {"id": 17, "name": "Instagram Post Generator", "industry": "Social Media", "description": "Generates and schedules Instagram posts automatically.", "framework": "CrewAI", "github": "https://github.com/crewAIInc/crewAI-examples"},
+    {"id": 18, "name": "Code Assistant", "industry": "Software Dev", "description": "Builds a resilient code assistant with graph-based error checking and iterative refinement.", "framework": "LangGraph", "github": "https://github.com/langchain-ai/langgraph"},
+    {"id": 19, "name": "Customer Support Agent", "industry": "Customer Service", "description": "Handles customer inquiries with automated support and enhanced user experience.", "framework": "LangGraph", "github": "https://github.com/langchain-ai/langgraph"},
+    {"id": 20, "name": "Multi-Agent Workflow", "industry": "Productivity", "description": "Supervisor agent orchestrates multiple specialised agents for complex task delegation.", "framework": "LangGraph", "github": "https://github.com/langchain-ai/langgraph"},
+    {"id": 21, "name": "SQL Agent", "industry": "Data", "description": "Converts natural language questions into SQL queries and executes them.", "framework": "LangGraph", "github": "https://github.com/langchain-ai/langgraph"},
+    {"id": 22, "name": "Adaptive RAG", "industry": "Research", "description": "Dynamic retrieval process that adjusts based on query complexity for accurate information retrieval.", "framework": "LangGraph", "github": "https://github.com/langchain-ai/langgraph"},
+    {"id": 23, "name": "Finance Agent", "industry": "Finance", "description": "AI-powered market analyst delivering real-time stock insights, analyst recommendations, and sector trends.", "framework": "Agno", "github": "https://github.com/agno-agi/agno"},
+    {"id": 24, "name": "Research Scholar Agent", "industry": "Education", "description": "Performs advanced academic searches, analyses publications, and synthesises findings with citations.", "framework": "Agno", "github": "https://github.com/agno-agi/agno"},
+    {"id": 25, "name": "Legal Document Analysis", "industry": "Legal", "description": "Analyses legal documents from PDFs and provides insights using vector embeddings.", "framework": "Agno", "github": "https://github.com/agno-agi/agno"},
+    {"id": 26, "name": "Movie Recommendation Agent", "industry": "Entertainment", "description": "Gives personalised movie recommendations by analysing genres, themes, and ratings.", "framework": "Agno", "github": "https://github.com/agno-agi/agno"},
+    {"id": 27, "name": "Recipe Creator", "industry": "Food", "description": "AI-powered recipe recommendation based on ingredients, preferences, and time constraints.", "framework": "Agno", "github": "https://github.com/agno-agi/agno"},
+    {"id": 28, "name": "Vibe Hacking Agent", "industry": "Cybersecurity", "description": "Autonomous multi-agent red team testing service.", "framework": "General", "github": "https://github.com/PurpleAILAB/Decepticon"},
+    {"id": 29, "name": "Property Pricing Agent", "industry": "Real Estate", "description": "Analyses market trends to determine property prices.", "framework": "General", "github": "https://github.com/AleksNeStu/ai-real-estate-assistant"},
+    {"id": 30, "name": "Smart Farming Assistant", "industry": "Agriculture", "description": "Provides insights on crop health and yield predictions.", "framework": "General", "github": "https://github.com/mohammed97ashraf/LLM_Agri_Bot"},
+    {"id": 31, "name": "YouTube Agent", "industry": "Media", "description": "Analyses YouTube videos generating summaries, timestamps, and content breakdowns.", "framework": "Agno", "github": "https://github.com/agno-agi/agno"},
+    {"id": 32, "name": "README Generator", "industry": "Software Dev", "description": "Generates high-quality READMEs for GitHub repos using repository metadata.", "framework": "Agno", "github": "https://github.com/agno-agi/agno"},
+    {"id": 33, "name": "Dubai Real Estate Workflow", "industry": "Real Estate", "description": "Multi-agent workflow to automate Dubai real estate research and analysis.", "framework": "CrewAI", "github": "https://github.com/sahiixx/500-AI-Agents-Projects"},
+    {"id": 34, "name": "Plan-and-Execute Agent", "industry": "Productivity", "description": "Generates a multi-step plan then executes each step sequentially, revising as needed.", "framework": "LangGraph", "github": "https://github.com/langchain-ai/langgraph"},
+    {"id": 35, "name": "Reflection Agent", "industry": "AI Research", "description": "Critiques and revises its own outputs to enhance quality and reliability.", "framework": "LangGraph", "github": "https://github.com/langchain-ai/langgraph"}
+]
+
+
+class ApplyPersonaRequest(BaseModel):
+    persona_id: str
+
+
+class KimiConfigRequest(BaseModel):
+    api_key: str
+
+
+@api_router.get("/hub/personas")
+async def get_hub_personas(request: Request):
+    """Get available bot personas"""
+    user = await get_current_user(request)
+    # Determine which persona is currently active
+    current_name = ""
+    try:
+        with open(IDENTITY_FILE, "r") as f:
+            current_name = f.read()
+    except Exception:
+        pass
+
+    result = []
+    for p in PERSONAS:
+        persona = dict(p)
+        # Mark active by checking if the identity file contains the persona name
+        if p["id"] == "neo" and "Neo (Default)" in current_name and "Cursor Mode" not in current_name and "Devin Mode" not in current_name and "Manus Mode" not in current_name and "Lovable Mode" not in current_name and "Perplexity Mode" not in current_name and "Claude Code Mode" not in current_name and "Notion AI Mode" not in current_name:
+            persona["active"] = True
+        elif f"({p['name']} Mode)" in current_name or (p["id"] != "neo" and f"Neo ({p['name']} Mode)" in current_name):
+            persona["active"] = True
+        else:
+            persona["active"] = p.get("active", False) and p["id"] == "neo"
+        result.append(persona)
+    return {"personas": result}
+
+
+@api_router.post("/hub/personas/apply")
+async def apply_hub_persona(request: Request, body: ApplyPersonaRequest):
+    """Apply a persona to the bot's IDENTITY.md"""
+    user = await require_auth(request)
+
+    persona_id = body.persona_id
+    if persona_id not in PERSONA_IDENTITY_TEMPLATES:
+        raise HTTPException(status_code=404, detail="Persona not found")
+
+    identity_content = PERSONA_IDENTITY_TEMPLATES[persona_id]
+    try:
+        os.makedirs(WORKSPACE_DIR_CLAWD, exist_ok=True)
+        with open(IDENTITY_FILE, "w") as f:
+            f.write(identity_content)
+        logger.info(f"Persona '{persona_id}' applied by {user.email}")
+        persona = next((p for p in PERSONAS if p["id"] == persona_id), None)
+        return {"ok": True, "message": f"Persona '{persona['name']}' applied successfully", "persona": persona}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to apply persona: {str(e)}")
+
+
+@api_router.get("/hub/agents")
+async def get_hub_agents(q: str = "", industry: str = "", framework: str = ""):
+    """Get AI agent use cases, with optional filtering"""
+    results = AGENT_USE_CASES
+    if q:
+        q_lower = q.lower()
+        results = [a for a in results if q_lower in a["name"].lower() or q_lower in a["description"].lower() or q_lower in a["industry"].lower()]
+    if industry and industry != "All":
+        results = [a for a in results if a["industry"] == industry]
+    if framework and framework != "All":
+        results = [a for a in results if a["framework"] == framework]
+    industries = sorted(set(a["industry"] for a in AGENT_USE_CASES))
+    frameworks = sorted(set(a["framework"] for a in AGENT_USE_CASES))
+    return {"agents": results, "total": len(results), "industries": industries, "frameworks": frameworks}
+
+
+@api_router.post("/hub/kimi/configure")
+async def configure_kimi(request: Request, body: KimiConfigRequest):
+    """Configure Moonshot/Kimi as an LLM provider"""
+    user = await require_auth(request)
+
+    api_key = body.api_key.strip()
+    if not api_key or len(api_key) < 10:
+        raise HTTPException(status_code=400, detail="Invalid Kimi API key")
+
+    # Load existing clawdbot config
+    try:
+        existing_config = {}
+        if os.path.exists(CONFIG_FILE):
+            with open(CONFIG_FILE, "r") as f:
+                existing_config = json.load(f)
+
+        if "models" not in existing_config:
+            existing_config["models"] = {"mode": "merge", "providers": {}}
+        if "providers" not in existing_config["models"]:
+            existing_config["models"]["providers"] = {}
+
+        # Add Kimi/Moonshot as a provider (OpenAI-compatible API)
+        existing_config["models"]["providers"]["kimi"] = {
+            "baseUrl": "https://api.moonshot.cn/v1/",
+            "apiKey": api_key,
+            "api": "openai-completions",
+            "models": [
+                {
+                    "id": "moonshot-v1-8k",
+                    "name": "Kimi (8k)",
+                    "input": ["text"],
+                    "contextWindow": 8000,
+                    "maxTokens": 4096
+                },
+                {
+                    "id": "moonshot-v1-32k",
+                    "name": "Kimi (32k)",
+                    "input": ["text"],
+                    "contextWindow": 32000,
+                    "maxTokens": 16384
+                },
+                {
+                    "id": "moonshot-v1-128k",
+                    "name": "Kimi (128k)",
+                    "input": ["text"],
+                    "contextWindow": 128000,
+                    "maxTokens": 65536
+                }
+            ]
+        }
+
+        with open(CONFIG_FILE, "w") as f:
+            json.dump(existing_config, f, indent=2)
+
+        # Restart gateway if running to pick up new provider
+        if check_gateway_running():
+            import subprocess as _sp
+            _sp.run(["supervisorctl", "restart", "clawdbot-gateway"], capture_output=True)
+
+        logger.info(f"Kimi provider configured by {user.email}")
+        return {"ok": True, "message": "Moonshot/Kimi provider configured successfully. Available models: moonshot-v1-8k, 32k, 128k"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to configure Kimi: {str(e)}")
+
+
 # ============== Legacy Status Endpoints ==============
 
 @api_router.post("/status", response_model=StatusCheck)
