@@ -1731,7 +1731,8 @@ async def get_hub_personas(request: Request):
 
 
 @api_router.post("/hub/personas/apply")
-async def apply_hub_persona(request: Request, body: ApplyPersonaRequest):    """Apply a persona to the bot's IDENTITY.md"""
+async def apply_hub_persona(request: Request, body: ApplyPersonaRequest):
+    """Apply a persona to the bot's IDENTITY.md"""
     user = await require_auth(request)
 
     persona_id = body.persona_id
