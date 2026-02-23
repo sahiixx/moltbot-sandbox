@@ -549,6 +549,114 @@ export default function SetupPage() {
           </motion.div>
         )}
 
+        {/* Telegram Bot Card */}
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.2, delay: 0.2 }}
+          className="max-w-lg mt-6"
+        >
+          <Card className="border-[#1f2022] bg-[#141416]/95 backdrop-blur-sm">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Send className="w-5 h-5 text-[#2AABEE]" />
+                  <CardTitle className="text-base font-semibold">Telegram Bot</CardTitle>
+                </div>
+                {telegramStatus?.connected ? (
+                  <Badge
+                    data-testid="telegram-status-badge"
+                    className="bg-[#22c55e]/15 text-[#22c55e] border border-[#22c55e]/30 text-xs"
+                  >
+                    Connected
+                  </Badge>
+                ) : (
+                  <Badge
+                    data-testid="telegram-status-badge"
+                    variant="outline"
+                    className="border-zinc-700 text-zinc-500 text-xs"
+                  >
+                    Not connected
+                  </Badge>
+                )}
+              </div>
+              <CardDescription className="text-zinc-400 text-sm">
+                {telegramStatus?.connected
+                  ? `@${telegramStatus.bot?.username} is active and listening for messages.`
+                  : 'Connect a Telegram bot to receive and send messages via OpenClaw.'}
+              </CardDescription>
+            </CardHeader>
+
+            <CardContent className="space-y-3">
+              {telegramStatus?.connected ? (
+                <div
+                  data-testid="telegram-bot-info"
+                  className="flex items-center gap-3 rounded-lg border border-[#22c55e]/20 bg-[#22c55e]/5 px-4 py-3"
+                >
+                  <CheckCircle2 className="w-5 h-5 text-[#22c55e] flex-shrink-0" />
+                  <div>
+                    <p className="text-sm font-medium text-zinc-200">{telegramStatus.bot?.name}</p>
+                    <p className="text-xs text-zinc-500">@{telegramStatus.bot?.username}</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <Label htmlFor="telegramToken" className="text-zinc-300 text-sm">
+                    Bot Token
+                  </Label>
+                  <div className="relative">
+                    <Input
+                      id="telegramToken"
+                      data-testid="telegram-token-input"
+                      type={telegramReveal ? 'text' : 'password'}
+                      value={telegramToken}
+                      onChange={(e) => setTelegramToken(e.target.value)}
+                      disabled={savingTelegram}
+                      placeholder="1234567890:AABBcc..."
+                      className="pr-20 bg-[#0f0f10] border-[#1f2022] focus-visible:ring-[#2AABEE] focus-visible:ring-offset-0 h-10 text-sm"
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      data-testid="telegram-token-reveal"
+                      onClick={() => setTelegramReveal(r => !r)}
+                      disabled={savingTelegram}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 h-8 px-3 text-xs text-zinc-400 hover:text-zinc-200 hover:bg-[#1f2022]"
+                    >
+                      {telegramReveal ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </Button>
+                  </div>
+                  <p className="text-xs text-zinc-600">
+                    Get your token from{' '}
+                    <a href="https://t.me/BotFather" target="_blank" rel="noreferrer" className="text-[#2AABEE] hover:underline">
+                      @BotFather
+                    </a>{' '}
+                    on Telegram.
+                  </p>
+                </div>
+              )}
+            </CardContent>
+
+            {!telegramStatus?.connected && (
+              <CardFooter className="pt-0">
+                <Button
+                  onClick={handleSaveTelegram}
+                  data-testid="save-telegram-button"
+                  disabled={savingTelegram || !telegramToken.trim()}
+                  className="bg-[#2AABEE] hover:bg-[#1a9bde] text-white font-medium h-9 px-5 text-sm"
+                >
+                  {savingTelegram ? (
+                    <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Connecting...</>
+                  ) : (
+                    'Connect Bot'
+                  )}
+                </Button>
+              </CardFooter>
+            )}
+          </Card>
+        </motion.div>
+
         {/* Footer Info */}
         <motion.div
           initial={{ opacity: 0 }}
