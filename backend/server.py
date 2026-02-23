@@ -1339,6 +1339,40 @@ async def delete_chat_session(request: Request, session_id: str):
     return {"ok": True}
 
 
+@api_router.post("/chat/transcribe")
+async def transcribe_audio(request: Request, audio: UploadFile = File(...)):
+    """Transcribe audio using OpenAI Whisper"""
+    user = await require_auth(request)
+    try:
+        audio_bytes = await audio.read()
+        if len(audio_bytes) > 25 * 1024 * 1024:
+            raise HTTPException(status_code=400, detail="Audio file too large (max 25MB)")
+
+        import tempfile
+        suffix = '.webm'
+        if audio.filename:
+            ext = os.path.splitext(audio.filename)[1]
+            if ext in ['.mp3', '.mp4', '.wav', '.ogg', '.m4a', '.webm']:
+                suffix = ext
+
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+            tmp.write(audio_bytes)
+            tmp_path = tmp.name
+
+        try:
+            stt = OpenAISpeechToText(api_key=os.environ.get("EMERGENT_API_KEY", ""))
+            with open(tmp_path, "rb") as f:
+                response = await stt.transcribe(file=f, model="whisper-1", response_format="json")
+            return {"text": response.text}
+        finally:
+            os.unlink(tmp_path)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Transcription error: {e}")
+        raise HTTPException(status_code=502, detail=f"Transcription failed: {str(e)}")
+
+
 # ============== AI Hub Endpoints ==============
 
 WORKSPACE_DIR_CLAWD = os.path.expanduser("~/clawd")
