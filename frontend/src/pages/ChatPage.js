@@ -343,6 +343,28 @@ export default function ChatPage() {
     } catch { /* ignore */ }
   };
 
+  // Debounced persona detection
+  useEffect(() => {
+    if (!input.trim() || input.length < 15) { setPersonaSuggestion(null); return; }
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(`${API}/hub/personas/detect`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+          body: JSON.stringify({ message: input })
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.persona_id && data.confidence >= 0.33 && data.persona_id !== persona?.id) {
+            setPersonaSuggestion(data);
+          } else {
+            setPersonaSuggestion(null);
+          }
+        }
+      } catch { /* ignore */ }
+    }, 600);
+    return () => clearTimeout(timer);
+  }, [input, persona]);
+
   const handleSend = async () => {
     const text = input.trim();
     if (!text || sending) return;
