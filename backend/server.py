@@ -2053,6 +2053,39 @@ async def quick_chat(request: Request, body: QuickChatRequest):
         raise HTTPException(status_code=500, detail=f"Chat failed: {str(e)}")
 
 
+@api_router.post("/chat/playground")
+async def playground_chat(request: Request, body: PlaygroundRequest):
+    """Playground endpoint for testing prompts with custom parameters"""
+    user = await require_auth(request)
+    
+    try:
+        import time
+        start_time = time.time()
+        
+        # Create LlmChat with custom parameters
+        chat = LlmChat(
+            model=body.model,
+            temperature=body.temperature,
+            max_tokens=body.max_tokens
+        )
+        
+        # Send message and get response
+        response = chat.chat([UserMessage(content=body.prompt)])
+        
+        end_time = time.time()
+        
+        return {
+            "ok": True,
+            "model": body.model,
+            "response": response.content if hasattr(response, 'content') else str(response),
+            "time": round(end_time - start_time, 2),
+            "tokens": body.max_tokens  # TODO: Get actual token count from response
+        }
+    except Exception as e:
+        logger.error(f"Playground chat error: {e}")
+        raise HTTPException(status_code=500, detail=f"Playground failed: {str(e)}")
+
+
 # ============== Legacy Status Endpoints ==============
 
 @api_router.post("/status", response_model=StatusCheck)
