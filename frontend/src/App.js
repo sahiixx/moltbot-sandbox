@@ -4,6 +4,7 @@ import { BrowserRouter, Routes, Route, useLocation, Navigate } from "react-route
 import LoginPage from "@/pages/LoginPage";
 import SetupPage from "@/pages/SetupPage";
 import HubPage from "@/pages/HubPage";
+import ChatPage from "@/pages/ChatPage";
 import AuthCallback from "@/pages/AuthCallback";
 import { Toaster } from "@/components/ui/sonner";
 
@@ -23,6 +24,7 @@ function AppRouter() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/" element={<SetupPage />} />
       <Route path="/hub" element={<HubPage />} />
+      <Route path="/chat" element={<ChatPage />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
