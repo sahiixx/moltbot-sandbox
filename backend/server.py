@@ -117,6 +117,37 @@ EMERGENT_AUTH_URL = "https://demobackend.emergentagent.com/auth/v1/env/oauth/ses
 SESSION_EXPIRY_DAYS = 7
 
 
+async def get_instance_owner() -> Optional[dict]:
+    """Get the instance owner from database. Returns None if not locked yet."""
+    doc = await db.instance_config.find_one({"_id": "instance_owner"})
+    return doc
+
+
+async def set_instance_owner(user: User) -> None:
+    """Lock the instance to a specific user. Only succeeds if not already locked."""
+    await db.instance_config.update_one(
+        {"_id": "instance_owner"},
+        {
+            "$setOnInsert": {
+                "user_id": user.user_id,
+                "email": user.email,
+                "name": user.name,
+                "locked_at": datetime.now(timezone.utc)
+            }
+        },
+        upsert=True
+    )
+
+
+async def check_instance_access(user: User) -> bool:
+    """Check if user is allowed to access this instance. Returns True if allowed."""
+    owner = await get_instance_owner()
+    if not owner:
+        # Instance not locked yet - anyone can access
+        return True
+    return owner.get("user_id") == user.user_id
+
+
 async def get_current_user(request: Request) -> Optional[User]:
     """
     Get current user from session token.
@@ -169,20 +200,41 @@ async def get_current_user(request: Request) -> Optional[User]:
 
 
 async def require_auth(request: Request) -> User:
-    """Dependency that requires authentication"""
+    """Dependency that requires authentication and instance access"""
     user = await get_current_user(request)
     if not user:
         raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    # Check if user is allowed to access this instance
+    if not await check_instance_access(user):
+        owner = await get_instance_owner()
+        raise HTTPException(
+            status_code=403, 
+            detail=f"This instance is locked to {owner.get('email', 'another user')}. Access denied."
+        )
     return user
 
 
 # ============== Auth Endpoints ==============
+
+@api_router.get("/auth/instance")
+async def get_instance_status():
+    """
+    Check if the instance is locked.
+    Public endpoint - only returns locked status, no owner details.
+    """
+    owner = await get_instance_owner()
+    if owner:
+        return {"locked": True}
+    return {"locked": False}
+
 
 @api_router.post("/auth/session")
 async def create_session(request: SessionRequest, response: Response):
     """
     Exchange session_id from Emergent Auth for a session token.
     Creates user if not exists, creates session, sets cookie.
+    Blocks non-owners if instance is locked.
     """
     try:
         # Call Emergent Auth to get user data
@@ -201,10 +253,18 @@ async def create_session(request: SessionRequest, response: Response):
         email = auth_data.get("email")
         name = auth_data.get("name", email.split("@")[0] if email else "User")
         picture = auth_data.get("picture")
-        emergent_session_token = auth_data.get("session_token")
 
         if not email:
             raise HTTPException(status_code=400, detail="No email in auth response")
+
+        # Check if instance is locked to another user
+        owner = await get_instance_owner()
+        if owner and owner.get("email") != email:
+            logger.warning(f"Blocked login attempt from {email} - instance locked to {owner.get('email')}")
+            raise HTTPException(
+                status_code=403,
+                detail=f"This instance is private and locked to {owner.get('email')}. Access denied."
+            )
 
         # Check if user exists
         existing_user = await db.users.find_one({"email": email}, {"_id": 0})
@@ -656,7 +716,7 @@ async def start_gateway_process(api_key: str, provider: str, owner_user_id: str)
     gateway_state["owner_user_id"] = owner_user_id
 
     # Wait for gateway to be ready
-    max_wait = 30
+    max_wait = 60
     start_time = asyncio.get_event_loop().time()
 
     async with httpx.AsyncClient() as http_client:
@@ -727,6 +787,10 @@ async def start_moltbot(request: OpenClawStartRequest, req: Request):
 
     try:
         token = await start_gateway_process(request.apiKey, request.provider, user.user_id)
+
+        # Lock the instance to this user on first successful start
+        await set_instance_owner(user)
+        logger.info(f"Instance locked to user: {user.email}")
 
         return OpenClawStartResponse(
             ok=True,
