@@ -2085,6 +2085,200 @@ app.add_middleware(
 
 # Background task for auto-fixing WhatsApp
 whatsapp_watcher_task = None
+digest_scheduler_task = None
+
+
+# ============== Daily Digest ==============
+
+async def send_telegram_message(chat_id: str, text: str) -> bool:
+    """Send a message to a Telegram user via the bot."""
+    token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+    if not token or not chat_id:
+        return False
+    try:
+        async with httpx.AsyncClient() as hc:
+            resp = await hc.post(
+                f"https://api.telegram.org/bot{token}/sendMessage",
+                json={"chat_id": chat_id, "text": text, "parse_mode": "Markdown"},
+                timeout=10.0
+            )
+            return resp.status_code == 200
+    except Exception as e:
+        logger.error(f"[digest] Telegram send failed: {e}")
+        return False
+
+
+async def get_paired_telegram_id() -> Optional[str]:
+    """Get the first paired Telegram user ID from credentials file."""
+    allow_file = os.path.expanduser("~/.clawdbot/credentials/telegram-allowFrom.json")
+    try:
+        if os.path.exists(allow_file):
+            with open(allow_file) as f:
+                data = json.load(f)
+            # Handle both list and dict formats
+            if isinstance(data, list) and data:
+                return str(data[0])
+            elif isinstance(data, dict):
+                ids = list(data.keys())
+                if ids:
+                    return str(ids[0])
+    except Exception as e:
+        logger.warning(f"[digest] Could not read paired Telegram ID: {e}")
+    return None
+
+
+async def generate_digest_summary(user_email: str) -> Optional[str]:
+    """Generate a digest summary of recent activity using Claude."""
+    since = datetime.now(timezone.utc) - timedelta(hours=24)
+    since_iso = since.isoformat()
+
+    messages = await db.chat_messages.find(
+        {"user_email": user_email, "created_at": {"$gte": since_iso}},
+        {"_id": 0}
+    ).sort("created_at", 1).to_list(200)
+
+    if not messages:
+        return None
+
+    # Build conversation summary
+    convo_text = "\n".join(
+        f"[{m['role'].upper()}]: {m['content'][:300]}"
+        for m in messages[:80]
+    )
+    user_msgs = [m for m in messages if m["role"] == "user"]
+    assistant_msgs = [m for m in messages if m["role"] == "assistant"]
+
+    prompt = (
+        f"You are Neo, a personal AI assistant. Here is a summary of the last 24 hours of conversations "
+        f"({len(user_msgs)} user messages, {len(assistant_msgs)} responses):\n\n"
+        f"{convo_text}\n\n"
+        f"Write a concise morning digest (3-5 bullet points) covering:\n"
+        f"- Key topics discussed\n"
+        f"- Important decisions or information from the conversation\n"
+        f"- Any action items or follow-ups mentioned\n"
+        f"Keep it brief, friendly, and useful. Use Telegram-friendly markdown (bold with *, not **)."
+    )
+
+    try:
+        chat = LlmChat(
+            api_key=os.environ.get("EMERGENT_API_KEY", ""),
+            session_id=f"digest-{user_email}-{datetime.now(timezone.utc).date()}",
+            system_message="You are Neo, a helpful AI assistant generating a daily digest."
+        ).with_model("anthropic", "claude-sonnet-4-5-20250929")
+        summary = await chat.send_message(UserMessage(text=prompt))
+        return summary
+    except Exception as e:
+        logger.error(f"[digest] LLM summary failed: {e}")
+        return None
+
+
+async def run_digest_for_user(user_email: str):
+    """Run the full digest pipeline for a user and deliver via Telegram."""
+    logger.info(f"[digest] Running digest for {user_email}")
+    summary = await generate_digest_summary(user_email)
+    if not summary:
+        logger.info(f"[digest] No messages in last 24h for {user_email}, skipping")
+        return False
+
+    telegram_id = await get_paired_telegram_id()
+    header = f"*Good morning! Here's your Neo digest for {datetime.now(timezone.utc).strftime('%B %d, %Y')}:*\n\n"
+    full_message = header + summary
+
+    sent = False
+    if telegram_id:
+        sent = await send_telegram_message(telegram_id, full_message)
+        logger.info(f"[digest] Telegram delivery: {'ok' if sent else 'failed'}")
+
+    # Store in history
+    await db.digest_history.insert_one({
+        "user_email": user_email,
+        "content": full_message,
+        "message_count": await db.chat_messages.count_documents(
+            {"user_email": user_email,
+             "created_at": {"$gte": (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()}}
+        ),
+        "telegram_sent": sent,
+        "sent_at": datetime.now(timezone.utc).isoformat()
+    })
+    return True
+
+
+async def digest_scheduler():
+    """Background task: runs daily digest at the configured time."""
+    logger.info("[digest-scheduler] Started")
+    last_sent_date = None
+    while True:
+        await asyncio.sleep(60)  # check every minute
+        try:
+            config = await db.digest_config.find_one({}, {"_id": 0})
+            if not config or not config.get("enabled"):
+                continue
+
+            now_utc = datetime.now(timezone.utc)
+            send_time = config.get("send_time", "08:00")
+            h, m = map(int, send_time.split(":"))
+            today = now_utc.date()
+
+            if now_utc.hour == h and now_utc.minute == m and last_sent_date != today:
+                last_sent_date = today
+                user_email = config.get("user_email")
+                if user_email:
+                    await run_digest_for_user(user_email)
+        except Exception as e:
+            logger.warning(f"[digest-scheduler] Error: {e}")
+
+
+class DigestConfigRequest(BaseModel):
+    enabled: bool
+    send_time: str = "08:00"  # HH:MM UTC
+
+
+@api_router.get("/digest/config")
+async def get_digest_config(request: Request):
+    user = await require_auth(request)
+    config = await db.digest_config.find_one({"user_email": user.email}, {"_id": 0})
+    if not config:
+        return {"enabled": False, "send_time": "08:00", "user_email": user.email}
+    return config
+
+
+@api_router.post("/digest/config")
+async def save_digest_config(request: Request, body: DigestConfigRequest):
+    user = await require_auth(request)
+    # Validate time format
+    try:
+        h, m = map(int, body.send_time.split(":"))
+        assert 0 <= h <= 23 and 0 <= m <= 59
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid time format. Use HH:MM (UTC).")
+    await db.digest_config.update_one(
+        {"user_email": user.email},
+        {"$set": {"enabled": body.enabled, "send_time": body.send_time,
+                  "user_email": user.email, "updated_at": datetime.now(timezone.utc).isoformat()}},
+        upsert=True
+    )
+    return {"ok": True, "enabled": body.enabled, "send_time": body.send_time}
+
+
+@api_router.post("/digest/trigger")
+async def trigger_digest_now(request: Request):
+    user = await require_auth(request)
+    sent = await run_digest_for_user(user.email)
+    if sent:
+        return {"ok": True, "message": "Digest sent to your Telegram!"}
+    return {"ok": False, "message": "No messages in the last 24h to summarise — chat with Neo first!"}
+
+
+@api_router.get("/digest/history")
+async def get_digest_history(request: Request):
+    user = await require_auth(request)
+    history = await db.digest_history.find(
+        {"user_email": user.email}, {"_id": 0}
+    ).sort("sent_at", -1).limit(10).to_list(10)
+    return {"history": history}
+
+
+# Background task for auto-fixing WhatsApp
 
 async def whatsapp_auto_fix_watcher():
     """Auto-fix Baileys registered=false bug every 5 seconds."""

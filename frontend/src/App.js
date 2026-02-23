@@ -8,6 +8,7 @@ import ChatPage from "@/pages/ChatPage";
 import AuthCallback from "@/pages/AuthCallback";
 import ModelComparePage from "@/pages/ModelComparePage";
 import AnalyticsPage from "@/pages/AnalyticsPage";
+import PlaygroundPage from "@/pages/PlaygroundPage";
 import { Toaster } from "@/components/ui/sonner";
 
 // REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS OR REDIRECT URLS, THIS BREAKS THE AUTH
