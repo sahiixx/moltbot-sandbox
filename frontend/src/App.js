@@ -3,6 +3,7 @@ import "@/App.css";
 import { BrowserRouter, Routes, Route, useLocation, Navigate } from "react-router-dom";
 import LoginPage from "@/pages/LoginPage";
 import SetupPage from "@/pages/SetupPage";
+import HubPage from "@/pages/HubPage";
 import AuthCallback from "@/pages/AuthCallback";
 import { Toaster } from "@/components/ui/sonner";
 
@@ -21,6 +22,7 @@ function AppRouter() {
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/" element={<SetupPage />} />
+      <Route path="/hub" element={<HubPage />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
