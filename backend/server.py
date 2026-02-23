@@ -850,8 +850,8 @@ async def stop_moltbot(request: Request):
         )
         return {"ok": True, "message": "OpenClaw is not running"}
 
-    # Check if user is the owner
-    if gateway_state["owner_user_id"] != user.user_id:
+    # Check if user is the owner (None owner = unclaimed after restart, allow through)
+    if gateway_state["owner_user_id"] is not None and gateway_state["owner_user_id"] != user.user_id:
         raise HTTPException(status_code=403, detail="Only the owner can stop OpenClaw")
 
     # Stop via supervisor
