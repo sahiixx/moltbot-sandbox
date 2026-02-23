@@ -7,7 +7,8 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import {
   Plus, Send, Trash2, Loader2, ArrowLeft, MessageSquare,
-  LayoutGrid, User, LogOut, ChevronLeft, ChevronRight, Copy, Check
+  LayoutGrid, User, LogOut, ChevronLeft, ChevronRight,
+  Copy, Check, Mic, MicOff, Zap
 } from 'lucide-react';
 import OpenClaw from '@/components/ui/icons/OpenClaw';
 
