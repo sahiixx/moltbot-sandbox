@@ -316,12 +316,26 @@ export default function ChatPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || 'Failed to send');
 
-      // Set session and reload messages
+      // Set session and reload messages, mark last assistant msg as new
       if (!activeSessionId) {
         setActiveSessionId(data.session_id);
         fetchSessions();
+        // Fetch history then mark last as new for typewriter
+        const histRes = await fetch(`${API}/chat/history/${data.session_id}`, { credentials: 'include' });
+        if (histRes.ok) {
+          const histData = await histRes.json();
+          const msgs = histData.messages || [];
+          if (msgs.length > 0) msgs[msgs.length - 1]._isNew = true;
+          setMessages(msgs);
+        }
       } else {
-        await fetchHistory(data.session_id);
+        const histRes = await fetch(`${API}/chat/history/${data.session_id}`, { credentials: 'include' });
+        if (histRes.ok) {
+          const histData = await histRes.json();
+          const msgs = histData.messages || [];
+          if (msgs.length > 0) msgs[msgs.length - 1]._isNew = true;
+          setMessages(msgs);
+        }
         fetchSessions();
       }
     } catch (e) {
