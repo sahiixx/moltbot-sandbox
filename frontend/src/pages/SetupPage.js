@@ -677,6 +677,16 @@ export default function SetupPage() {
           </Card>
         </motion.div>
 
+        {/* WhatsApp Card */}
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3, delay: 0.2 }}
+          className="max-w-lg mt-6"
+        >
+          <WhatsAppCard />
+        </motion.div>
+
         {/* Footer Info */}
         <motion.div
           initial={{ opacity: 0 }}
