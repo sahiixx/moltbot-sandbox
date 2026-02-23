@@ -83,7 +83,14 @@ Critical original requirement: slug generation must include high-entropy random 
 - Navigation: Chat button added to SetupPage and HubPage headers
 - LLM verified working: direct test returned "Hello! I'm Neo. How can I help you today?"
 
-### Phase 5 — Typewriter Animation + Markdown Rendering [2026-02-23]
+### Phase 6 — "All" Feature Batch [2026-02-23]
+- **Voice Input**: Mic button in chat → browser MediaRecorder → Whisper-1 transcription → fills input field
+- **Smart Persona Auto-Routing**: Detects message intent (coding/writing/research/UI/autonomous) and suggests persona switch inline. Rule-based classifier, 8 intent categories. `POST /api/hub/personas/detect`
+- **WhatsApp Setup UI**: WhatsApp card added to SetupPage showing connection status and `clawdbot whatsapp link` instructions
+- **50 Agents**: Expanded agent directory from 35 to 50 use cases (Healthcare, Finance, Marketing, Software Dev, etc.)
+- **Slug Entropy Verified**: `secrets.token_hex(32)` = 256 bits ✅ (requirement was ≥32 bits)
+
+
 - Typewriter animation for Neo's responses — adaptive speed, reveals character-by-character
 - Full markdown rendering: code blocks with copy button, tables, lists, blockquotes, inline code
 - Blinking cursor shown while text is being revealed
