@@ -1110,6 +1110,120 @@ async def websocket_proxy(websocket: WebSocket):
             pass
 
 
+# ============== Telegram Endpoints ==============
+
+TELEGRAM_BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN', '')
+TELEGRAM_API_BASE = "https://api.telegram.org"
+
+
+@api_router.get("/telegram/status")
+async def get_telegram_status():
+    """Get Telegram bot connection status"""
+    token = TELEGRAM_BOT_TOKEN
+    if not token:
+        # Try reading from clawdbot config
+        try:
+            with open(CONFIG_FILE, 'r') as f:
+                cfg = json.load(f)
+            token = cfg.get("channels", {}).get("telegram", {}).get("botToken", "")
+        except Exception:
+            pass
+
+    if not token:
+        return {"connected": False, "bot": None, "error": "No Telegram bot token configured"}
+
+    try:
+        async with httpx.AsyncClient() as hc:
+            resp = await hc.get(f"{TELEGRAM_API_BASE}/bot{token}/getMe", timeout=8.0)
+        if resp.status_code == 200:
+            data = resp.json()
+            bot = data.get("result", {})
+            return {
+                "connected": True,
+                "bot": {
+                    "id": bot.get("id"),
+                    "name": bot.get("first_name"),
+                    "username": bot.get("username"),
+                    "can_join_groups": bot.get("can_join_groups"),
+                    "supports_inline_queries": bot.get("supports_inline_queries")
+                }
+            }
+        else:
+            return {"connected": False, "bot": None, "error": f"Telegram API error: {resp.status_code}"}
+    except Exception as e:
+        logger.error(f"Telegram status check error: {e}")
+        return {"connected": False, "bot": None, "error": str(e)}
+
+
+class TelegramConfigRequest(BaseModel):
+    bot_token: str
+
+
+@api_router.post("/telegram/configure")
+async def configure_telegram(request_data: TelegramConfigRequest, req: Request):
+    """Configure Telegram bot token (requires auth)"""
+    user = await require_auth(req)
+
+    token = request_data.bot_token.strip()
+    if not token or len(token) < 20:
+        raise HTTPException(status_code=400, detail="Invalid bot token")
+
+    # Validate token with Telegram API
+    try:
+        async with httpx.AsyncClient() as hc:
+            resp = await hc.get(f"{TELEGRAM_API_BASE}/bot{token}/getMe", timeout=8.0)
+        if resp.status_code != 200:
+            raise HTTPException(status_code=400, detail="Invalid Telegram bot token - verification failed")
+        bot_info = resp.json().get("result", {})
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to verify token: {str(e)}")
+
+    # Update clawdbot.json
+    try:
+        existing_config = {}
+        if os.path.exists(CONFIG_FILE):
+            with open(CONFIG_FILE, 'r') as f:
+                existing_config = json.load(f)
+        if "channels" not in existing_config:
+            existing_config["channels"] = {}
+        existing_config["channels"]["telegram"] = {"botToken": token, "enabled": True}
+        with open(CONFIG_FILE, 'w') as f:
+            json.dump(existing_config, f, indent=2)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to save config: {str(e)}")
+
+    # Update gateway.env to include TELEGRAM_BOT_TOKEN
+    try:
+        env_path = "/root/.clawdbot/gateway.env"
+        lines = []
+        if os.path.exists(env_path):
+            with open(env_path, 'r') as f:
+                lines = [l for l in f.readlines() if "TELEGRAM_BOT_TOKEN" not in l]
+        lines.append(f'export TELEGRAM_BOT_TOKEN="{token}"\n')
+        with open(env_path, 'w') as f:
+            f.writelines(lines)
+    except Exception as e:
+        logger.warning(f"Could not update gateway.env: {e}")
+
+    # Restart gateway to pick up Telegram config
+    if check_gateway_running():
+        import subprocess as _sp
+        _sp.run(["supervisorctl", "restart", "clawdbot-gateway"], capture_output=True)
+
+    logger.info(f"Telegram bot configured by {user.email}: @{bot_info.get('username')}")
+    return {
+        "ok": True,
+        "bot": {
+            "id": bot_info.get("id"),
+            "name": bot_info.get("first_name"),
+            "username": bot_info.get("username")
+        },
+        "message": f"Telegram bot @{bot_info.get('username')} configured successfully"
+    }
+
+
 # ============== Legacy Status Endpoints ==============
 
 @api_router.post("/status", response_model=StatusCheck)
