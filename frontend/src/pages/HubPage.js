@@ -256,6 +256,15 @@ export default function HubPage() {
             <Button
               variant="ghost"
               size="sm"
+              onClick={() => navigate('/hub/playground')}
+              className="text-zinc-400 hover:text-zinc-200 hover:bg-[#1f2022] gap-2"
+            >
+              <Sparkles className="w-4 h-4" />
+              <span className="hidden sm:inline text-xs">Playground</span>
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={() => navigate('/hub/compare')}
               className="text-zinc-400 hover:text-zinc-200 hover:bg-[#1f2022] gap-2"
             >

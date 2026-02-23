@@ -15,6 +15,187 @@ import OpenClaw from '@/components/ui/icons/OpenClaw';
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || '';
 const API = `${BACKEND_URL}/api`;
 
+// ===== Daily Digest Card =====
+function DigestCard() {
+  const [config, setConfig] = useState({ enabled: false, send_time: '08:00' });
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [triggering, setTriggering] = useState(false);
+  const [history, setHistory] = useState([]);
+  const [showHistory, setShowHistory] = useState(false);
+
+  useEffect(() => {
+    Promise.all([
+      fetch(`${API}/digest/config`, { credentials: 'include' }).then(r => r.ok ? r.json() : null),
+      fetch(`${API}/digest/history`, { credentials: 'include' }).then(r => r.ok ? r.json() : null),
+    ]).then(([cfg, hist]) => {
+      if (cfg) setConfig({ enabled: cfg.enabled, send_time: cfg.send_time || '08:00' });
+      if (hist) setHistory(hist.history || []);
+    }).finally(() => setLoading(false));
+  }, []);
+
+  const handleSave = async (newConfig) => {
+    setSaving(true);
+    try {
+      const res = await fetch(`${API}/digest/config`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        credentials: 'include', body: JSON.stringify(newConfig)
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setConfig(newConfig);
+        toast.success(newConfig.enabled ? `Daily digest set for ${newConfig.send_time} UTC` : 'Daily digest disabled');
+      } else {
+        toast.error(data.detail || 'Failed to save');
+      }
+    } catch { toast.error('Failed to save'); }
+    finally { setSaving(false); }
+  };
+
+  const handleTrigger = async () => {
+    setTriggering(true);
+    try {
+      const res = await fetch(`${API}/digest/trigger`, { method: 'POST', credentials: 'include' });
+      const data = await res.json();
+      toast[data.ok ? 'success' : 'info'](data.message);
+      if (data.ok) {
+        const hist = await fetch(`${API}/digest/history`, { credentials: 'include' }).then(r => r.json());
+        setHistory(hist.history || []);
+      }
+    } catch { toast.error('Failed to trigger digest'); }
+    finally { setTriggering(false); }
+  };
+
+  if (loading) return null;
+
+  return (
+    <Card data-testid="digest-card" className="border-[#1f2022] bg-[#141416]/95 backdrop-blur-sm">
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-[#FF4500]/10 border border-[#FF4500]/20 flex items-center justify-center">
+              {config.enabled ? <Bell className="w-4 h-4 text-[#FF4500]" /> : <BellOff className="w-4 h-4 text-zinc-500" />}
+            </div>
+            <div>
+              <CardTitle className="text-base font-semibold">Daily Digest</CardTitle>
+              <CardDescription className="text-zinc-500 text-sm">
+                Neo summarises your day and sends it to Telegram
+              </CardDescription>
+            </div>
+          </div>
+          <Badge
+            data-testid="digest-status-badge"
+            className={config.enabled
+              ? 'bg-[#FF4500]/15 text-[#FF4500] border border-[#FF4500]/30 text-xs'
+              : 'border-zinc-700 text-zinc-500 text-xs'}
+            variant={config.enabled ? undefined : 'outline'}
+          >
+            {config.enabled ? `Daily · ${config.send_time} UTC` : 'Off'}
+          </Badge>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {/* Toggle + Time */}
+        <div className="flex items-center gap-3">
+          <div className="flex-1">
+            <Label htmlFor="digestTime" className="text-zinc-400 text-xs mb-1 block">Send time (UTC)</Label>
+            <Input
+              id="digestTime"
+              data-testid="digest-time-input"
+              type="time"
+              value={config.send_time}
+              onChange={e => setConfig(c => ({ ...c, send_time: e.target.value }))}
+              disabled={saving}
+              className="h-9 text-sm bg-[#0f0f10] border-[#1f2022] focus-visible:ring-[#FF4500] focus-visible:ring-offset-0 w-32"
+            />
+          </div>
+          <div className="flex items-center gap-2 pt-5">
+            <button
+              data-testid="digest-toggle"
+              onClick={() => handleSave({ ...config, enabled: !config.enabled })}
+              disabled={saving}
+              className={`relative w-11 h-6 rounded-full transition-colors focus:outline-none ${
+                config.enabled ? 'bg-[#FF4500]' : 'bg-zinc-700'
+              }`}
+            >
+              <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${
+                config.enabled ? 'translate-x-5' : 'translate-x-0'
+              }`} />
+            </button>
+            <span className="text-xs text-zinc-500">{config.enabled ? 'On' : 'Off'}</span>
+          </div>
+          <Button
+            size="sm"
+            data-testid="digest-save-btn"
+            onClick={() => handleSave(config)}
+            disabled={saving}
+            className="h-9 px-4 text-xs bg-[#1f2022] hover:bg-[#2a2a2e] text-zinc-300 border border-[#2a2a2e] mt-5"
+          >
+            {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Save'}
+          </Button>
+        </div>
+
+        {/* Send Now */}
+        <div className="flex items-center justify-between pt-1 border-t border-[#1f2022]">
+          <p className="text-xs text-zinc-500">Trigger a digest right now from the last 24h of chats</p>
+          <Button
+            size="sm"
+            data-testid="digest-trigger-btn"
+            onClick={handleTrigger}
+            disabled={triggering}
+            className="h-8 px-3 text-xs bg-[#FF4500] hover:bg-[#e03d00] text-white gap-1.5 ml-3 flex-shrink-0"
+          >
+            {triggering ? (
+              <Loader2 className="w-3 h-3 animate-spin" />
+            ) : (
+              <><Play className="w-3 h-3" />Send Now</>
+            )}
+          </Button>
+        </div>
+
+        {/* History */}
+        {history.length > 0 && (
+          <div className="pt-1">
+            <button
+              onClick={() => setShowHistory(h => !h)}
+              className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
+              data-testid="digest-history-toggle"
+            >
+              {showHistory ? 'Hide' : 'Show'} past digests ({history.length})
+            </button>
+            {showHistory && (
+              <div className="mt-2 space-y-2">
+                {history.slice(0, 3).map((d, i) => (
+                  <div key={i} className="rounded-lg bg-[#0f0f10] border border-[#1f2022] p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-[10px] text-zinc-600">
+                        {new Date(d.sent_at).toLocaleString()}
+                      </span>
+                      <div className="flex gap-2">
+                        <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-zinc-800 text-zinc-600">
+                          {d.message_count} msgs
+                        </Badge>
+                        {d.telegram_sent && (
+                          <Badge className="text-[10px] px-1.5 py-0 bg-[#22c55e]/10 text-[#22c55e] border-[#22c55e]/20">
+                            Sent
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                    <p className="text-xs text-zinc-400 line-clamp-3 leading-relaxed whitespace-pre-wrap">
+                      {d.content.replace(/\*/g, '')}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 // ===== WhatsApp Card =====
 function WhatsAppCard() {
   const [status, setStatus] = useState(null);
