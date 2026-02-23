@@ -781,7 +781,8 @@ async def start_moltbot(request: OpenClawStartRequest, req: Request):
         raise HTTPException(status_code=400, detail="API key required for anthropic/openai providers")
 
     # Check if Moltbot is already running by another user
-    if check_gateway_running() and gateway_state["owner_user_id"] != user.user_id:
+    # owner_user_id can be None after a server restart (state not recovered) — treat None as "unclaimed"
+    if check_gateway_running() and gateway_state["owner_user_id"] is not None and gateway_state["owner_user_id"] != user.user_id:
         raise HTTPException(
             status_code=403,
             detail="OpenClaw is already running by another user. Please wait for them to stop it."
