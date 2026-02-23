@@ -1730,6 +1730,39 @@ async def get_hub_personas(request: Request):
     return {"personas": result}
 
 
+class DetectPersonaRequest(BaseModel):
+    message: str
+
+
+# Keyword maps for rule-based persona detection
+_PERSONA_RULES = [
+    ("cursor",    ["debug", "fix bug", "refactor", "code review", "function", "class", "import", "syntax", "error", "exception", "compile", "git", "pull request", "merge", "lint", "test", "unit test", "api endpoint", "database query", "sql", "javascript", "python", "typescript", "css", "html"]),
+    ("devin",     ["build me", "create a full", "set up a project", "deploy", "scaffold", "architecture", "system design", "microservice", "docker", "kubernetes", "cicd", "pipeline", "automate"]),
+    ("manus",     ["research and", "find and", "browse", "search the web", "multi-step", "complex task", "plan and execute", "schedule", "summarise and send", "monitor"]),
+    ("lovable",   ["ui", "ux", "design", "beautiful", "landing page", "dashboard", "frontend", "responsive", "animation", "tailwind", "figma", "component", "button", "modal", "form"]),
+    ("perplexity",["what is", "explain", "how does", "why is", "compare", "difference between", "pros and cons", "research", "citation", "source", "fact", "statistics", "latest news"]),
+    ("notion-ai", ["write", "draft", "essay", "blog post", "email", "letter", "summarise", "notes", "document", "outline", "edit this", "rewrite", "grammar", "proofread"]),
+    ("claude-code",["review this code", "explain this code", "large codebase", "legacy code", "security", "vulnerability", "careful", "thorough", "step by step implementation"]),
+]
+
+
+@api_router.post("/hub/personas/detect")
+async def detect_persona(body: DetectPersonaRequest):
+    """Detect best persona for a given message (rule-based)"""
+    text = body.message.lower()
+    scores = {}
+    for persona_id, keywords in _PERSONA_RULES:
+        score = sum(1 for kw in keywords if kw in text)
+        if score > 0:
+            scores[persona_id] = score
+    if not scores:
+        return {"persona_id": None, "confidence": 0}
+    best = max(scores, key=scores.get)
+    confidence = min(scores[best] / 3, 1.0)  # normalize
+    persona = next((p for p in PERSONAS if p["id"] == best), None)
+    return {"persona_id": best, "persona": persona, "confidence": round(confidence, 2)}
+
+
 @api_router.post("/hub/personas/apply")
 async def apply_hub_persona(request: Request, body: ApplyPersonaRequest):
     """Apply a persona to the bot's IDENTITY.md"""
