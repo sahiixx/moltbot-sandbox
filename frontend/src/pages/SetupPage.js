@@ -9,7 +9,7 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { Eye, EyeOff, Loader2, ExternalLink, CheckCircle2, LogOut, AlertCircle, User, Send, LayoutGrid, MessageSquare, Smartphone } from 'lucide-react';
+import { Eye, EyeOff, Loader2, ExternalLink, CheckCircle2, LogOut, AlertCircle, User, Send, LayoutGrid, MessageSquare, Smartphone, Bell, BellOff, Play } from 'lucide-react';
 import OpenClaw from '@/components/ui/icons/OpenClaw';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || '';

@@ -11,7 +11,7 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@
 import { toast } from 'sonner';
 import {
   ArrowLeft, Search, ExternalLink, CheckCircle2, Loader2, Zap, Eye, EyeOff,
-  User, LogOut, MessageSquare, BarChart3
+  User, LogOut, MessageSquare, BarChart3, Sparkles
 } from 'lucide-react';
 import OpenClaw from '@/components/ui/icons/OpenClaw';
 import ProviderCard from '@/components/ProviderCard';
