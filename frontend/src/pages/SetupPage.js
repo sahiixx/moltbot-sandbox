@@ -12,8 +12,88 @@ import { toast } from 'sonner';
 import { Eye, EyeOff, Loader2, ExternalLink, CheckCircle2, LogOut, AlertCircle, User, Send, LayoutGrid, MessageSquare } from 'lucide-react';
 import OpenClaw from '@/components/ui/icons/OpenClaw';
 
+import React, { useMemo, useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { motion } from 'framer-motion';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
+import { Progress } from '@/components/ui/progress';
+import { Badge } from '@/components/ui/badge';
+import { toast } from 'sonner';
+import { Eye, EyeOff, Loader2, ExternalLink, CheckCircle2, LogOut, AlertCircle, User, Send, LayoutGrid, MessageSquare, Smartphone } from 'lucide-react';
+import OpenClaw from '@/components/ui/icons/OpenClaw';
+
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || '';
 const API = `${BACKEND_URL}/api`;
+
+// ===== WhatsApp Card =====
+function WhatsAppCard() {
+  const [status, setStatus] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch(`${API}/openclaw/whatsapp/status`, { credentials: 'include' })
+      .then(r => r.json()).then(setStatus).catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  return (
+    <Card data-testid="whatsapp-card" className="border-[#1f2022] bg-[#141416]/95 backdrop-blur-sm">
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-[#25D366]/10 border border-[#25D366]/20 flex items-center justify-center">
+              <Smartphone className="w-4 h-4 text-[#25D366]" />
+            </div>
+            <div>
+              <CardTitle className="text-base font-semibold">WhatsApp</CardTitle>
+              <CardDescription className="text-zinc-500 text-sm">
+                Send and receive messages via WhatsApp
+              </CardDescription>
+            </div>
+          </div>
+          {loading ? (
+            <Loader2 className="w-4 h-4 animate-spin text-zinc-500" />
+          ) : status?.linked ? (
+            <Badge data-testid="whatsapp-status-badge" className="bg-[#22c55e]/15 text-[#22c55e] border border-[#22c55e]/30 text-xs">
+              Connected
+            </Badge>
+          ) : (
+            <Badge data-testid="whatsapp-status-badge" variant="outline" className="border-zinc-700 text-zinc-500 text-xs">
+              Not linked
+            </Badge>
+          )}
+        </div>
+      </CardHeader>
+      <CardContent>
+        {status?.linked ? (
+          <div className="flex items-center gap-3 rounded-lg bg-[#22c55e]/5 border border-[#22c55e]/20 px-4 py-3">
+            <CheckCircle2 className="w-4 h-4 text-[#22c55e] flex-shrink-0" />
+            <div>
+              <p className="text-sm font-medium text-zinc-200">WhatsApp linked</p>
+              {status.phone && <p className="text-xs text-zinc-500">{status.phone}</p>}
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <p className="text-sm text-zinc-400">
+              To link WhatsApp, run this command in your terminal — it will print a QR code to scan:
+            </p>
+            <div className="rounded-lg bg-[#0d0d0f] border border-[#252528] px-4 py-3 font-mono text-xs text-zinc-300 select-all">
+              clawdbot whatsapp link
+            </div>
+            <p className="text-xs text-zinc-600">
+              After scanning, OpenClaw will receive and respond to WhatsApp messages just like Telegram.
+            </p>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
 
 export default function SetupPage() {
   const navigate = useNavigate();
