@@ -2024,6 +2024,13 @@ class QuickChatRequest(BaseModel):
     message: str
 
 
+class PlaygroundRequest(BaseModel):
+    model: str
+    prompt: str
+    temperature: float = 0.7
+    max_tokens: int = 1000
+
+
 @api_router.post("/chat/quick")
 async def quick_chat(request: Request, body: QuickChatRequest):
     """Quick chat endpoint for testing models from Hub"""
@@ -2389,13 +2396,21 @@ async def startup_event():
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
-    global whatsapp_watcher_task
+    global whatsapp_watcher_task, digest_scheduler_task
 
     # Stop WhatsApp watcher task
     if whatsapp_watcher_task:
         whatsapp_watcher_task.cancel()
         try:
             await whatsapp_watcher_task
+        except asyncio.CancelledError:
+            pass
+
+    # Stop digest scheduler
+    if digest_scheduler_task:
+        digest_scheduler_task.cancel()
+        try:
+            await digest_scheduler_task
         except asyncio.CancelledError:
             pass
 
