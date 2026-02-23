@@ -268,9 +268,15 @@ export default function ChatPage() {
   const [sending, setSending] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [persona, setPersona] = useState(null);
+  const [personaSuggestion, setPersonaSuggestion] = useState(null); // { persona_id, persona }
 
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
+
+  const { recording, transcribing, startRecording, stopRecording } = useVoiceRecording(text => {
+    setInput(prev => (prev ? prev + ' ' + text : text));
+    inputRef.current?.focus();
+  });
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
