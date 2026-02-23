@@ -815,7 +815,7 @@ async def get_moltbot_status(request: Request):
     running = check_gateway_running()
 
     if running:
-        is_owner = user and gateway_state["owner_user_id"] == user.user_id
+        is_owner = not user or gateway_state["owner_user_id"] is None or gateway_state["owner_user_id"] == user.user_id
         return OpenClawStatusResponse(
             running=True,
             pid=SupervisorClient.get_pid(),
