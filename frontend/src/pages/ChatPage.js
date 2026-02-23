@@ -210,6 +210,51 @@ function SessionItem({ session, active, onClick, onDelete }) {
   );
 }
 
+// ===== Voice recording hook =====
+function useVoiceRecording(onTranscript) {
+  const [recording, setRecording] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
+  const mediaRecorderRef = useRef(null);
+  const chunksRef = useRef([]);
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mr = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+      chunksRef.current = [];
+      mr.ondataavailable = e => { if (e.data.size > 0) chunksRef.current.push(e.data); };
+      mr.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop());
+        const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
+        setTranscribing(true);
+        try {
+          const fd = new FormData();
+          fd.append('audio', blob, 'recording.webm');
+          const res = await fetch(`${API}/chat/transcribe`, {
+            method: 'POST', credentials: 'include', body: fd
+          });
+          const data = await res.json();
+          if (res.ok && data.text) onTranscript(data.text);
+          else toast.error('Could not transcribe. Try again.');
+        } catch { toast.error('Transcription failed'); }
+        finally { setTranscribing(false); }
+      };
+      mr.start();
+      mediaRecorderRef.current = mr;
+      setRecording(true);
+    } catch {
+      toast.error('Microphone access denied');
+    }
+  };
+
+  const stopRecording = () => {
+    mediaRecorderRef.current?.stop();
+    setRecording(false);
+  };
+
+  return { recording, transcribing, startRecording, stopRecording };
+}
+
 export default function ChatPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
