@@ -6,6 +6,8 @@ import SetupPage from "@/pages/SetupPage";
 import HubPage from "@/pages/HubPage";
 import ChatPage from "@/pages/ChatPage";
 import AuthCallback from "@/pages/AuthCallback";
+import ModelComparePage from "@/pages/ModelComparePage";
+import AnalyticsPage from "@/pages/AnalyticsPage";
 import { Toaster } from "@/components/ui/sonner";
 
 // REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS OR REDIRECT URLS, THIS BREAKS THE AUTH
@@ -24,6 +26,8 @@ function AppRouter() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/" element={<SetupPage />} />
       <Route path="/hub" element={<HubPage />} />
+      <Route path="/hub/compare" element={<ModelComparePage />} />
+      <Route path="/hub/analytics" element={<AnalyticsPage />} />
       <Route path="/chat" element={<ChatPage />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

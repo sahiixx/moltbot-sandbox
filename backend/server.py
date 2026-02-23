@@ -1649,6 +1649,12 @@ class KimiConfigRequest(BaseModel):
     api_key: str
 
 
+class ProviderConfigRequest(BaseModel):
+    provider: str  # "groq", "cohere", "deepseek", "ollama"
+    api_key: Optional[str] = None  # Not needed for Ollama
+    base_url: Optional[str] = None  # For Ollama or custom endpoints
+
+
 @api_router.get("/hub/personas")
 async def get_hub_personas(request: Request):
     """Get available bot personas"""
@@ -1774,6 +1780,187 @@ async def configure_kimi(request: Request, body: KimiConfigRequest):
         return {"ok": True, "message": "Moonshot/Kimi provider configured successfully. Available models: moonshot-v1-8k, 32k, 128k"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to configure Kimi: {str(e)}")
+
+
+@api_router.post("/hub/providers/configure")
+async def configure_provider(request: Request, body: ProviderConfigRequest):
+    """Configure additional LLM providers (Groq, Cohere, DeepSeek, Ollama)"""
+    user = await require_auth(request)
+    
+    provider = body.provider.lower()
+    
+    # Provider configurations
+    provider_configs = {
+        "groq": {
+            "baseUrl": "https://api.groq.com/openai/v1/",
+            "api": "openai-completions",
+            "models": [
+                {"id": "llama-3.3-70b-versatile", "name": "Llama 3.3 70B", "input": ["text"], "contextWindow": 128000, "maxTokens": 32768},
+                {"id": "llama-3.1-70b-versatile", "name": "Llama 3.1 70B", "input": ["text"], "contextWindow": 128000, "maxTokens": 32768},
+                {"id": "mixtral-8x7b-32768", "name": "Mixtral 8x7B", "input": ["text"], "contextWindow": 32768, "maxTokens": 32768},
+                {"id": "gemma2-9b-it", "name": "Gemma 2 9B", "input": ["text"], "contextWindow": 8192, "maxTokens": 8192}
+            ]
+        },
+        "cohere": {
+            "baseUrl": "https://api.cohere.ai/v1/",
+            "api": "openai-completions",
+            "models": [
+                {"id": "command-r-plus", "name": "Command R+", "input": ["text"], "contextWindow": 128000, "maxTokens": 4096},
+                {"id": "command-r", "name": "Command R", "input": ["text"], "contextWindow": 128000, "maxTokens": 4096},
+                {"id": "command", "name": "Command", "input": ["text"], "contextWindow": 4096, "maxTokens": 4096}
+            ]
+        },
+        "deepseek": {
+            "baseUrl": "https://api.deepseek.com/v1/",
+            "api": "openai-completions",
+            "models": [
+                {"id": "deepseek-chat", "name": "DeepSeek Chat", "input": ["text"], "contextWindow": 64000, "maxTokens": 4096},
+                {"id": "deepseek-coder", "name": "DeepSeek Coder", "input": ["text"], "contextWindow": 64000, "maxTokens": 4096}
+            ]
+        },
+        "ollama": {
+            "baseUrl": body.base_url or "http://localhost:11434/v1/",
+            "api": "openai-completions",
+            "models": [
+                {"id": "llama3.2", "name": "Llama 3.2 (Local)", "input": ["text"], "contextWindow": 128000, "maxTokens": 4096},
+                {"id": "mistral", "name": "Mistral (Local)", "input": ["text"], "contextWindow": 32768, "maxTokens": 4096},
+                {"id": "qwen2.5", "name": "Qwen 2.5 (Local)", "input": ["text"], "contextWindow": 128000, "maxTokens": 4096}
+            ]
+        }
+    }
+    
+    if provider not in provider_configs:
+        raise HTTPException(status_code=400, detail=f"Unsupported provider: {provider}")
+    
+    # Validate API key for non-Ollama providers
+    if provider != "ollama":
+        if not body.api_key or len(body.api_key.strip()) < 10:
+            raise HTTPException(status_code=400, detail=f"{provider.title()} requires an API key")
+    
+    try:
+        # Load existing config
+        existing_config = {}
+        if os.path.exists(CONFIG_FILE):
+            with open(CONFIG_FILE, "r") as f:
+                existing_config = json.load(f)
+        
+        if "models" not in existing_config:
+            existing_config["models"] = {"mode": "merge", "providers": {}}
+        if "providers" not in existing_config["models"]:
+            existing_config["models"]["providers"] = {}
+        
+        # Add the provider
+        config = provider_configs[provider].copy()
+        if provider != "ollama":
+            config["apiKey"] = body.api_key.strip()
+        
+        existing_config["models"]["providers"][provider] = config
+        
+        # Write config
+        with open(CONFIG_FILE, "w") as f:
+            json.dump(existing_config, f, indent=2)
+        
+        # Restart gateway if running
+        if check_gateway_running():
+            import subprocess as _sp
+            _sp.run(["supervisorctl", "restart", "clawdbot-gateway"], capture_output=True)
+        
+        model_list = ", ".join([m["id"] for m in config["models"]])
+        logger.info(f"{provider.title()} provider configured by {user.email}")
+        return {
+            "ok": True,
+            "provider": provider,
+            "message": f"{provider.title()} provider configured successfully.",
+            "models": [m["id"] for m in config["models"]]
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to configure {provider}: {str(e)}")
+
+
+@api_router.get("/hub/providers")
+async def get_providers(request: Request):
+    """Get list of configured providers"""
+    user = await require_auth(request)
+    
+    try:
+        if not os.path.exists(CONFIG_FILE):
+            return {"providers": {}}
+        
+        with open(CONFIG_FILE, "r") as f:
+            config = json.load(f)
+        
+        providers = config.get("models", {}).get("providers", {})
+        
+        # Return provider info without exposing API keys
+        result = {}
+        for name, prov in providers.items():
+            result[name] = {
+                "name": name,
+                "configured": True,
+                "models": [m["id"] for m in prov.get("models", [])]
+            }
+        
+        return {"providers": result}
+    except Exception as e:
+        logger.error(f"Failed to get providers: {e}")
+        return {"providers": {}}
+
+
+@api_router.get("/hub/analytics")
+async def get_analytics(request: Request, range: str = "7d"):
+    """Get usage analytics (mock data for now - integrate with OpenClaw logs later)"""
+    user = await require_auth(request)
+    
+    # TODO: Integrate with actual OpenClaw usage logs
+    # For now, return realistic mock data
+    return {
+        "totalTokens": 1250000,
+        "totalCost": 12.45,
+        "totalRequests": 342,
+        "avgResponseTime": 1.8,
+        "topModels": [
+            {"model": "claude-sonnet-4-5", "requests": 156, "tokens": 620000, "cost": 6.20, "avgTime": 1.5},
+            {"model": "gpt-5.2", "requests": 98, "tokens": 380000, "cost": 5.70, "avgTime": 2.1},
+            {"model": "llama-3.3-70b", "requests": 54, "tokens": 180000, "cost": 0.11, "avgTime": 0.9},
+            {"model": "deepseek-chat", "requests": 34, "tokens": 70000, "cost": 0.02, "avgTime": 2.4}
+        ],
+        "dailyUsage": [
+            {"day": "Mon", "tokens": 145000, "cost": 1.45},
+            {"day": "Tue", "tokens": 198000, "cost": 1.98},
+            {"day": "Wed", "tokens": 210000, "cost": 2.10},
+            {"day": "Thu", "tokens": 185000, "cost": 1.85},
+            {"day": "Fri", "tokens": 232000, "cost": 2.32},
+            {"day": "Sat", "tokens": 156000, "cost": 1.56},
+            {"day": "Sun", "tokens": 124000, "cost": 1.24}
+        ]
+    }
+
+
+class QuickChatRequest(BaseModel):
+    model: str
+    message: str
+
+
+@api_router.post("/chat/quick")
+async def quick_chat(request: Request, body: QuickChatRequest):
+    """Quick chat endpoint for testing models from Hub"""
+    user = await require_auth(request)
+    
+    try:
+        # Create LlmChat instance with selected model
+        chat = LlmChat(model=body.model)
+        
+        # Send message and get response
+        response = chat.chat([UserMessage(content=body.message)])
+        
+        return {
+            "ok": True,
+            "model": body.model,
+            "response": response.content if hasattr(response, 'content') else str(response)
+        }
+    except Exception as e:
+        logger.error(f"Quick chat error: {e}")
+        raise HTTPException(status_code=500, detail=f"Chat failed: {str(e)}")
 
 
 # ============== Legacy Status Endpoints ==============

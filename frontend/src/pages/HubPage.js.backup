@@ -11,11 +11,9 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@
 import { toast } from 'sonner';
 import {
   ArrowLeft, Search, ExternalLink, CheckCircle2, Loader2, Zap, Eye, EyeOff,
-  User, LogOut, MessageSquare, BarChart3
+  User, LogOut, MessageSquare
 } from 'lucide-react';
 import OpenClaw from '@/components/ui/icons/OpenClaw';
-import ProviderCard from '@/components/ProviderCard';
-import QuickChatDrawer from '@/components/QuickChatDrawer';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || '';
 const API = `${BACKEND_URL}/api`;
@@ -63,12 +61,6 @@ export default function HubPage() {
   const [kimiSaving, setKimiSaving] = useState(false);
   const [kimiConfigured, setKimiConfigured] = useState(false);
 
-  // Providers state
-  const [providers, setProviders] = useState({});
-
-  // Quick chat state
-  const [quickChatOpen, setQuickChatOpen] = useState(false);
-
   useEffect(() => {
     const checkAuth = async () => {
       try {
@@ -87,7 +79,6 @@ export default function HubPage() {
     fetchPersonas();
     fetchAgents();
     checkKimiConfig();
-    fetchProviders();
   }, [navigate]);
 
   const fetchPersonas = async () => {
@@ -128,22 +119,6 @@ export default function HubPage() {
       const res = await fetch(`${API}/openclaw/status`, { credentials: 'include' });
       // For now just assume not configured until applied
     } catch { /* ignore */ }
-  };
-
-  const fetchProviders = async () => {
-    try {
-      const res = await fetch(`${API}/hub/providers`, { credentials: 'include' });
-      if (res.ok) {
-        const data = await res.json();
-        setProviders(data.providers || {});
-        // Check if Kimi is configured
-        if (data.providers?.kimi) {
-          setKimiConfigured(true);
-        }
-      }
-    } catch (e) {
-      console.error('Failed to fetch providers:', e);
-    }
   };
 
   const handleApplyPersona = async (personaId) => {
@@ -253,24 +228,6 @@ export default function HubPage() {
                 <span className="hidden sm:inline text-xs">{user.name}</span>
               </div>
             )}
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => navigate('/hub/compare')}
-              className="text-zinc-400 hover:text-zinc-200 hover:bg-[#1f2022] gap-2"
-            >
-              <Zap className="w-4 h-4" />
-              <span className="hidden sm:inline text-xs">Compare</span>
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => navigate('/hub/analytics')}
-              className="text-zinc-400 hover:text-zinc-200 hover:bg-[#1f2022] gap-2"
-            >
-              <BarChart3 className="w-4 h-4" />
-              <span className="hidden sm:inline text-xs">Analytics</span>
-            </Button>
             <Button
               variant="ghost"
               size="sm"
@@ -561,24 +518,10 @@ export default function HubPage() {
                 </div>
               </div>
 
-              {/* Additional Providers */}
+              {/* Kimi/Moonshot */}
               <div>
                 <h2 className="text-sm font-semibold text-zinc-300 mb-3">
-                  Add More Providers
-                  <Badge variant="outline" className="ml-2 border-zinc-700 text-zinc-500 text-xs font-normal">Expand your model options</Badge>
-                </h2>
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                  <ProviderCard providerId="groq" configured={providers.groq?.configured} />
-                  <ProviderCard providerId="cohere" configured={providers.cohere?.configured} />
-                  <ProviderCard providerId="deepseek" configured={providers.deepseek?.configured} />
-                  <ProviderCard providerId="ollama" configured={providers.ollama?.configured} />
-                </div>
-              </div>
-
-              {/* Kimi/Moonshot */}
-              <div className="mt-8">
-                <h2 className="text-sm font-semibold text-zinc-300 mb-3">
-                  Moonshot / Kimi
+                  Add Provider — Moonshot / Kimi
                   <Badge variant="outline" className="ml-2 border-zinc-700 text-zinc-500 text-xs font-normal">From kimi-agent-sdk</Badge>
                 </h2>
                 <Card
@@ -682,18 +625,6 @@ export default function HubPage() {
           </TabsContent>
         </Tabs>
       </div>
-
-      {/* Floating Quick Chat Button */}
-      <Button
-        onClick={() => setQuickChatOpen(true)}
-        className="fixed bottom-6 right-6 w-14 h-14 rounded-full bg-[#FF4500] hover:bg-[#FF4500]/90 text-white shadow-lg z-50"
-        title="Quick Chat"
-      >
-        <MessageSquare className="w-5 h-5" />
-      </Button>
-
-      {/* Quick Chat Drawer */}
-      <QuickChatDrawer open={quickChatOpen} onClose={() => setQuickChatOpen(false)} />
     </div>
   );
 }
