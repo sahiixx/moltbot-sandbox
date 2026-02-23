@@ -1160,7 +1160,7 @@ class TelegramConfigRequest(BaseModel):
 
 
 @api_router.post("/telegram/configure")
-async def configure_telegram(request_data: TelegramConfigRequest, req: Request):
+async def configure_telegram(req: Request, request_data: TelegramConfigRequest):
     """Configure Telegram bot token (requires auth)"""
     user = await require_auth(req)
 
