@@ -1225,6 +1225,119 @@ async def configure_telegram(req: Request, request_data: TelegramConfigRequest):
     }
 
 
+# ============== Chat Endpoints ==============
+
+_active_chat_sessions: dict = {}
+
+
+def get_chat_system_prompt() -> str:
+    """Load current persona from IDENTITY.md"""
+    try:
+        with open(IDENTITY_FILE, "r") as f:
+            identity = f.read()
+        return (
+            f"You are Neo, an AI assistant. Your identity and persona are defined below:\n\n"
+            f"{identity}\n\n"
+            f"Respond naturally based on your persona. Be helpful, direct, and aligned with your identity. "
+            f"Keep responses concise unless detail is explicitly needed."
+        )
+    except Exception:
+        return "You are Neo, a direct and capable AI assistant. Be helpful and concise."
+
+
+def get_or_create_llm(cache_key: str, session_id: str) -> LlmChat:
+    if cache_key not in _active_chat_sessions:
+        system_prompt = get_chat_system_prompt()
+        _active_chat_sessions[cache_key] = LlmChat(
+            api_key=os.environ.get("EMERGENT_API_KEY", ""),
+            session_id=session_id,
+            system_message=system_prompt
+        ).with_model("anthropic", "claude-sonnet-4-5-20250929")
+    return _active_chat_sessions[cache_key]
+
+
+class ChatMessageRequest(BaseModel):
+    session_id: Optional[str] = None
+    message: str
+
+
+@api_router.post("/chat/message")
+async def send_chat_message(request: Request, body: ChatMessageRequest):
+    user = await require_auth(request)
+    message_text = body.message.strip()
+    if not message_text:
+        raise HTTPException(status_code=400, detail="Message cannot be empty")
+
+    session_id = body.session_id
+    if not session_id:
+        session_id = str(uuid.uuid4())
+        await db.chat_sessions.insert_one({
+            "session_id": session_id,
+            "user_email": user.email,
+            "title": message_text[:60],
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        })
+
+    cache_key = f"{user.email}:{session_id}"
+    chat = get_or_create_llm(cache_key, session_id)
+
+    await db.chat_messages.insert_one({
+        "session_id": session_id,
+        "user_email": user.email,
+        "role": "user",
+        "content": message_text,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    })
+
+    try:
+        response_text = await chat.send_message(UserMessage(text=message_text))
+    except Exception as e:
+        logger.error(f"LLM error: {e}")
+        raise HTTPException(status_code=502, detail=f"LLM error: {str(e)}")
+
+    await db.chat_messages.insert_one({
+        "session_id": session_id,
+        "user_email": user.email,
+        "role": "assistant",
+        "content": response_text,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    })
+    await db.chat_sessions.update_one(
+        {"session_id": session_id},
+        {"$set": {"updated_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    return {"session_id": session_id, "response": response_text}
+
+
+@api_router.get("/chat/sessions")
+async def get_chat_sessions(request: Request):
+    user = await require_auth(request)
+    sessions = await db.chat_sessions.find(
+        {"user_email": user.email}, {"_id": 0}
+    ).sort("updated_at", -1).limit(30).to_list(30)
+    return {"sessions": sessions}
+
+
+@api_router.get("/chat/history/{session_id}")
+async def get_chat_history(request: Request, session_id: str):
+    user = await require_auth(request)
+    messages = await db.chat_messages.find(
+        {"session_id": session_id, "user_email": user.email}, {"_id": 0}
+    ).sort("created_at", 1).to_list(300)
+    return {"messages": messages, "session_id": session_id}
+
+
+@api_router.delete("/chat/session/{session_id}")
+async def delete_chat_session(request: Request, session_id: str):
+    user = await require_auth(request)
+    await db.chat_sessions.delete_one({"session_id": session_id, "user_email": user.email})
+    await db.chat_messages.delete_many({"session_id": session_id, "user_email": user.email})
+    cache_key = f"{user.email}:{session_id}"
+    _active_chat_sessions.pop(cache_key, None)
+    return {"ok": True}
+
+
 # ============== AI Hub Endpoints ==============
 
 WORKSPACE_DIR_CLAWD = os.path.expanduser("~/clawd")
