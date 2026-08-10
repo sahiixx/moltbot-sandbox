@@ -1,0 +1,29 @@
+name: hermes-azure-check
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, master]
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify Azure Foundry endpoint
+        env:
+          AZURE_FOUNDRY_API_KEY: ${{ secrets.AZURE_FOUNDRY_API_KEY }}
+          AZURE_FOUNDRY_BASE_URL: ${{ secrets.AZURE_FOUNDRY_BASE_URL }}
+        run: |
+          if [ -z "$AZURE_FOUNDRY_API_KEY" ]; then
+            echo "AZURE_FOUNDRY_API_KEY not set - skipping live check"
+            exit 0
+          fi
+          code=$(curl -sS -o /tmp/out.json -w '%{http_code}' \
+            -H "api-key: $AZURE_FOUNDRY_API_KEY" \
+            -H 'Content-Type: application/json' \
+            "$AZURE_FOUNDRY_BASE_URL/chat/completions" \
+            -d '{"model":"gpt-5.6-sol","messages":[{"role":"user","content":"ping"}],"max_completion_tokens":16}')
+          echo "HTTP $code"
+          test "$code" = "200"
