@@ -1,13 +1,62 @@
 name: hermes-azure-check
 
 on:
-  workflow_dispatch:
   push:
     branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+    inputs:
+      run_live:
+        description: Run the live Azure Foundry verification request
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
 
 jobs:
-  verify:
+  offline:
+    name: Offline validation
     runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate repository offline
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s AGENTS.md
+          test -s .github/workflows/hermes-azure-check.yml
+          bash -n start-moltbot.sh
+          node --input-type=module -e "import fs from 'node:fs'; JSON.parse(fs.readFileSync('package.json', 'utf8')); JSON.parse(fs.readFileSync('tsconfig.json', 'utf8'));"
+          python3 - <<'PY'
+          from pathlib import Path
+
+          workflow = Path(".github/workflows/hermes-azure-check.yml").read_text()
+          required = (
+              "pull_request:",
+              "workflow_dispatch:",
+              "run_live:",
+              "type: boolean",
+              "inputs.run_live == true",
+              "AZURE_FOUNDRY_API_KEY",
+              "AZURE_FOUNDRY_BASE_URL",
+          )
+          missing = [item for item in required if item not in workflow]
+          if missing:
+              raise SystemExit(f"Workflow contract is missing: {', '.join(missing)}")
+          if "AZURE_FOUNDRY_API_KEY" + " not set" in workflow:
+            raise SystemExit("Live verification must not silently skip missing credentials")
+          print("Offline contract and repository configuration validated; no provider request made.")
+          PY
+
+  live:
+    name: Live Azure Foundry verification
+    if: github.event_name == 'workflow_dispatch' && inputs.run_live == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
 
@@ -15,15 +64,69 @@ jobs:
         env:
           AZURE_FOUNDRY_API_KEY: ${{ secrets.AZURE_FOUNDRY_API_KEY }}
           AZURE_FOUNDRY_BASE_URL: ${{ secrets.AZURE_FOUNDRY_BASE_URL }}
+        shell: bash
         run: |
-          if [ -z "$AZURE_FOUNDRY_API_KEY" ]; then
-            echo "AZURE_FOUNDRY_API_KEY not set - skipping live check"
-            exit 0
+          set -euo pipefail
+          if [[ -z "${AZURE_FOUNDRY_API_KEY:-}" ]]; then
+            echo "::error::AZURE_FOUNDRY_API_KEY is required when run_live=true."
+            exit 1
           fi
-          code=$(curl -sS -o /tmp/out.json -w '%{http_code}' \
-            -H "api-key: $AZURE_FOUNDRY_API_KEY" \
-            -H 'Content-Type: application/json' \
-            "$AZURE_FOUNDRY_BASE_URL/chat/completions" \
-            -d '{"model":"gpt-5.6-sol","messages":[{"role":"user","content":"ping"}],"max_completion_tokens":16}')
-          echo "HTTP $code"
-          test "$code" = "200"
+          if [[ -z "${AZURE_FOUNDRY_BASE_URL:-}" ]]; then
+            echo "::error::AZURE_FOUNDRY_BASE_URL is required when run_live=true."
+            exit 1
+          fi
+
+          python3 - "$AZURE_FOUNDRY_BASE_URL" <<'PY'
+          import sys
+          from urllib.parse import urlsplit
+
+          value = sys.argv[1]
+          parsed = urlsplit(value)
+          try:
+              parsed.port
+          except ValueError as exc:
+              raise SystemExit("AZURE_FOUNDRY_BASE_URL has an invalid port") from exc
+          if (
+              parsed.scheme != "https"
+              or not parsed.hostname
+              or parsed.username is not None
+              or parsed.password is not None
+              or parsed.query
+              or parsed.fragment
+              or any(character.isspace() for character in value)
+          ):
+              raise SystemExit(
+                  "AZURE_FOUNDRY_BASE_URL must be a valid HTTPS base URL without credentials, "
+                  "a query, or a fragment"
+              )
+          PY
+
+          response_file="$(mktemp)"
+          cleanup() {
+            rm -f "$response_file"
+          }
+          trap cleanup EXIT
+
+          endpoint="${AZURE_FOUNDRY_BASE_URL%/}/chat/completions"
+          if ! http_code="$(
+            curl \
+              --silent \
+              --show-error \
+              --connect-timeout 10 \
+              --max-time 60 \
+              --output "$response_file" \
+              --write-out '%{http_code}' \
+              --header "api-key: ${AZURE_FOUNDRY_API_KEY}" \
+              --header 'Content-Type: application/json' \
+              --data-raw '{"model":"gpt-5.6-sol","messages":[{"role":"user","content":"ping"}],"max_completion_tokens":16}' \
+              "$endpoint"
+          )"; then
+            echo "::error::Azure Foundry request failed due to a network or TLS error; response body omitted."
+            exit 1
+          fi
+
+          if [[ "$http_code" != "200" ]]; then
+            echo "::error::Azure Foundry request returned HTTP ${http_code}; expected HTTP 200."
+            exit 1
+          fi
+          echo "Azure Foundry request returned HTTP 200."
