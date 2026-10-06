@@ -118,9 +118,13 @@ start-moltbot.sh
 # lint / format before committing
 npm run lint
 
-# run the CI check locally
-gh workflow run hermes-azure-check.yml
+# Pushes and pull requests run offline validation. Live verification is manual:
+gh workflow run hermes-azure-check.yml -f run_live=true
 ```
+
+Set the repository secrets `AZURE_FOUNDRY_API_KEY` and `AZURE_FOUNDRY_BASE_URL` before
+dispatching. The base URL must be a valid `https://` URL. Missing or invalid credentials,
+network errors, and non-200 responses fail the live check without logging the response body.
 
 Secrets live in environment variables and CI secrets — never in tracked files.
 
